@@ -1,4 +1,4 @@
--- gakuka FTAP - Tokra Style Menu v2.0 (Иллюзия безопасности)
+-- gakuka FTAP - Tokra Style Menu v2.0 (Исправлено: кнопки меняются, прыжок нормальный)
 -- Вкладки: Grab | Defense | Speed | Misc
 -- Все функции: Anti-Grab, Иллюзия безопасности (Shuriken), ROBLOX EGOR, Anchor Grab, FLING GRAB
 
@@ -19,7 +19,7 @@ local flingActive = false
 local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
-local antiKickActive = true   -- переменная остаётся, но в интерфейсе будет "Иллюзия безопасности"
+local antiKickActive = true
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
@@ -76,7 +76,7 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН + ТЕЛЕПОРТАЦИЯ) ===
+-- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН) ===
 -- ========================================
 local antiKickConnection = nil
 local shurikenObject = nil
@@ -163,7 +163,7 @@ local function stopIllusion()
 end
 
 -- ========================================
--- === ROBLOX EGOR ===
+-- === ROBLOX EGOR (БЕЗ ИЗМЕНЕНИЯ ПРЫЖКА) ===
 -- ========================================
 local speedLoop = nil
 
@@ -177,7 +177,7 @@ local function setSpeed()
         else
             if humanoid.WalkSpeed ~= 16 then humanoid.WalkSpeed = 16 end
         end
-        humanoid.JumpPower = 50
+        -- НЕ ТРОГАЕМ JumpPower, оставляем как в игре
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
     end)
@@ -565,7 +565,7 @@ print("  💀 gakuka FTAP - TOKRA STYLE")
 print("  =================================")
 print("  🛡️ ANTI-GRAB - БЕЗ БЛОКИРОВКИ")
 print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН) - ВКЛ")
-print("  ✅ ROBLOX EGOR - скорость 70")
+print("  ✅ ROBLOX EGOR - скорость 70 (прыжок НЕ ТРОГАЕМ)")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
 print("  💥 FLING GRAB - все летают (кроме тебя)")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
