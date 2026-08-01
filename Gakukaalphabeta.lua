@@ -1,6 +1,6 @@
--- gakuka FTAP - Tokra Style Menu v2.0 (Fling Grab вместо Fling All)
+-- gakuka FTAP - Tokra Style Menu v2.0 (Иллюзия безопасности)
 -- Вкладки: Grab | Defense | Speed | Misc
--- Все функции: Anti-Grab, Anti-Kick (Shuriken), ROBLOX EGOR, Anchor Grab, FLING GRAB
+-- Все функции: Anti-Grab, Иллюзия безопасности (Shuriken), ROBLOX EGOR, Anchor Grab, FLING GRAB
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,14 +19,15 @@ local flingActive = false
 local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
-local antiKickActive = true
+local antiKickActive = true   -- переменная остаётся, но в интерфейсе будет "Иллюзия безопасности"
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
+local contentFrame = nil
 local currentTab = "Grab"
 
--- ===== КНОПКИ =====
-local buttons = {}
+-- ===== КНОПКИ ВКЛАДОК =====
+local tabButtons = {}
 
 -- ========================================
 -- === ANTI-GRAB (БЕЗ БЛОКИРОВКИ ДВИЖЕНИЯ) ===
@@ -75,7 +76,7 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ANTI-KICK (СЮРИКЕН + ТЕЛЕПОРТАЦИЯ) ===
+-- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН + ТЕЛЕПОРТАЦИЯ) ===
 -- ========================================
 local antiKickConnection = nil
 local shurikenObject = nil
@@ -90,7 +91,7 @@ local function createShuriken()
     shuriken.CanCollide = false
     shuriken.CanQuery = false
     shuriken.Transparency = 0.15
-    shuriken.Name = "AntiKickShuriken"
+    shuriken.Name = "IllusionShuriken"
     shuriken.Parent = workspace
 
     local angles = {0, 90, 180, 270}
@@ -132,7 +133,7 @@ local function createShuriken()
     return shuriken
 end
 
-local function startAntiKick()
+local function startIllusion()
     if antiKickConnection then return end
     if not shurikenObject then
         shurikenObject = createShuriken()
@@ -150,7 +151,7 @@ local function startAntiKick()
     end)
 end
 
-local function stopAntiKick()
+local function stopIllusion()
     if antiKickConnection then
         antiKickConnection:Disconnect()
         antiKickConnection = nil
@@ -274,7 +275,7 @@ local function stopAnchorGrab()
 end
 
 -- ========================================
--- === FLING GRAB (ранее FLING ALL) ===
+-- === FLING GRAB ===
 -- ========================================
 local flingConn = nil
 
@@ -318,40 +319,48 @@ end
 local function toggleSpeed()
     speedModeActive = not speedModeActive
     setSpeed()
+    updateTabContent(currentTab)
 end
 
 local function toggleAntiGrab()
     antiGrabActive = not antiGrabActive
     if antiGrabActive then startAntiGrab() else stopAntiGrab() end
+    updateTabContent(currentTab)
 end
 
 local function toggleAnchorGrab()
     anchorGrabActive = not anchorGrabActive
     if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
+    updateTabContent(currentTab)
 end
 
-local function toggleAntiKick()
+local function toggleIllusion()
     antiKickActive = not antiKickActive
-    if antiKickActive then startAntiKick() else stopAntiKick() end
+    if antiKickActive then startIllusion() else stopIllusion() end
+    updateTabContent(currentTab)
 end
 
 local function toggleFling()
     if flingActive then stopFling() else startFling() end
+    updateTabContent(currentTab)
 end
 
 local function stopAll()
     stopFling()
     stopAntiGrab()
     stopSpeedControl()
-    stopAntiKick()
+    stopIllusion()
     stopAnchorGrab()
     speedModeActive = false
     anchorGrabActive = false
+    updateTabContent(currentTab)
 end
 
 -- ========================================
 -- === GUI (TOKRA STYLE) ===
 -- ========================================
+local closeBtn = nil
+
 local function createTabButtons()
     local tabNames = {"Grab", "Defense", "Speed", "Misc"}
     local tabY = 0.07
@@ -373,26 +382,21 @@ local function createTabButtons()
         c.Parent = tabBtn
         tabBtn.MouseButton1Click:Connect(function()
             currentTab = name
-            for _, child in ipairs(mainFrame:GetChildren()) do
-                if child:IsA("TextButton") and child.Text ~= "" and child ~= closeBtn then
-                    child.BackgroundColor3 = (child == tabBtn) and Color3.fromRGB(80, 80, 180) or Color3.fromRGB(40, 40, 60)
-                end
+            for _, btn in pairs(tabButtons) do
+                btn.BackgroundColor3 = (btn == tabBtn) and Color3.fromRGB(80, 80, 180) or Color3.fromRGB(40, 40, 60)
             end
             updateTabContent(name)
         end)
-        buttons[name] = tabBtn
+        tabButtons[name] = tabBtn
     end
 end
 
 local function updateTabContent(tab)
-    -- Очищаем старые кнопки (кроме вкладок и заголовка)
-    for _, child in ipairs(mainFrame:GetChildren()) do
-        if child:IsA("TextButton") and child ~= buttons.Grab and child ~= buttons.Defense and child ~= buttons.Speed and child ~= buttons.Misc and child ~= closeBtn then
-            child:Destroy()
-        end
+    if contentFrame then
+        contentFrame:ClearAllChildren()
     end
     
-    local y = 0.15
+    local y = 0.0
     local function addButton(text, color, callback)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0.85, 0, 0, 28)
@@ -405,7 +409,7 @@ local function updateTabContent(tab)
         btn.TextSize = 12
         btn.BorderSizePixel = 2
         btn.BorderColor3 = Color3.fromRGB(80, 80, 150)
-        btn.Parent = mainFrame
+        btn.Parent = contentFrame
         local c = Instance.new("UICorner")
         c.CornerRadius = UDim.new(0, 8)
         c.Parent = btn
@@ -415,47 +419,31 @@ local function updateTabContent(tab)
     end
     
     if tab == "Grab" then
-        -- Кнопка FLING GRAB (переименована)
-        local btnFling = addButton("💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]"), flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40), function()
+        addButton("💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]"), flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40), function()
             toggleFling()
-            btnFling.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btnFling.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
         end)
-        -- Кнопка ANCHOR GRAB
-        local btnAnchor = addButton("⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40), function()
+        addButton("⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40), function()
             toggleAnchorGrab()
-            btnAnchor.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btnAnchor.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
         end)
     elseif tab == "Defense" then
-        local btnAG = addButton("🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
+        addButton("🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
             toggleAntiGrab()
-            btnAG.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btnAG.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
         end)
-        local btnAK = addButton("🚫 ANTI-KICK " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]"), antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
-            toggleAntiKick()
-            btnAK.Text = "🚫 ANTI-KICK " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btnAK.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+        addButton("🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]"), antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
+            toggleIllusion()
         end)
     elseif tab == "Speed" then
-        local btnSpeed = addButton("🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]"), speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40), function()
+        addButton("🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]"), speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40), function()
             toggleSpeed()
-            btnSpeed.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btnSpeed.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
         end)
     elseif tab == "Misc" then
         addButton("⛔ ОСТАНОВИТЬ ВСЁ", Color3.fromRGB(150, 0, 30), function()
             stopAll()
-            -- Обновим все кнопки в других вкладках позже, но проще перерисовать текущую вкладку
-            updateTabContent(currentTab)
         end)
     end
 end
 
 -- ===== GUI СОЗДАНИЕ =====
-local closeBtn = nil
-
 local function createGUI()
     if screenGui then screenGui:Destroy() end
     screenGui = Instance.new("ScreenGui")
@@ -521,10 +509,14 @@ local function createGUI()
         if screenGui then screenGui:Destroy(); screenGui = nil end
     end)
     
-    -- Вкладки
-    createTabButtons()
+    -- Контейнер для контента вкладок
+    contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, 0, 1, -50)
+    contentFrame.Position = UDim2.new(0, 0, 0, 50)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Parent = mainFrame
     
-    -- Контент по умолчанию
+    createTabButtons()
     updateTabContent("Grab")
     
     return screenGui
@@ -545,7 +537,7 @@ end
 -- === ИНИЦИАЛИЗАЦИЯ ===
 -- ========================================
 setSpeed()
-startAntiKick()
+startIllusion()
 createGUI()
 
 RunService.Heartbeat:Connect(tick)
@@ -557,7 +549,7 @@ player.CharacterAdded:Connect(function(newChar)
     wait(0.5)
     setSpeed()
     if antiGrabActive then startAntiGrab() end
-    if antiKickActive then startAntiKick() end
+    if antiKickActive then startIllusion() end
     if flingActive then
         stopFling()
         startFling()
@@ -572,7 +564,7 @@ print("====================================")
 print("  💀 gakuka FTAP - TOKRA STYLE")
 print("  =================================")
 print("  🛡️ ANTI-GRAB - БЕЗ БЛОКИРОВКИ")
-print("  🚫 ANTI-KICK (СЮРИКЕН) - ВКЛ")
+print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН) - ВКЛ")
 print("  ✅ ROBLOX EGOR - скорость 70")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
 print("  💥 FLING GRAB - все летают (кроме тебя)")
