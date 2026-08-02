@@ -1,13 +1,15 @@
--- gakuka FTAP - ULTIMATE v1.3 (СЮРИКЕН ТОЙ ИЗ ЧАСТЕЙ)
--- Все функции: Anti-Grab, ROBLOX EGOR (speed 70), Super Throw, Anchor Grab, FLING GRAB,
--- Иллюзия безопасности (Anti-Kick + Anti-Kick Grab с той-сюрикеном), Уведомления о киках
--- Кнопки работают, меню сворачивается, прыжок нормальный
+-- gakuka FTAP - FINAL v2.0 (ТЕЛЕФОН)
+-- Все функции: Anti-Grab, ROBLOX EGOR, Super Throw, Anchor Grab, FLING GRAB,
+-- Иллюзия безопасности (Anti-Kick), Jerk Off (кнопка в меню), Уведомления о киках
+-- Меню сворачивается, кнопки работают
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
 local player = Players.LocalPlayer
 
 if not player then return end
@@ -24,13 +26,14 @@ local anchorGrabActive = false
 local antiKickActive = true
 local kickNotifierActive = true
 local superThrowActive = false
+local jerkOffActive = false
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
 local collapsed = false
 
 -- ===== КНОПКИ =====
-local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, superBtn, stopBtn, statusText, toggleBtn
+local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, superBtn, jerkBtn, stopBtn, statusText, toggleBtn
 
 -- ========================================
 -- === ФУНКЦИЯ ОБНОВЛЕНИЯ КНОПОК ===
@@ -64,12 +67,17 @@ local function updateButtons()
         superBtn.Text = "⚡ SUPER THROW " .. (superThrowActive and "[ВКЛ]" or "[ВЫКЛ]")
         superBtn.BackgroundColor3 = superThrowActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
     end
+    if jerkBtn then
+        jerkBtn.Text = "🔞 JERK OFF " .. (jerkOffActive and "[ВКЛ]" or "[ВЫКЛ]")
+        jerkBtn.BackgroundColor3 = jerkOffActive and Color3.fromRGB(200, 50, 200) or Color3.fromRGB(180, 40, 40)
+    end
     if statusText then
         local parts = {}
         if kickNotifierActive then table.insert(parts, "🔔 Уведомления ВКЛ") else table.insert(parts, "🔕 Уведомления ВЫКЛ") end
         if antiKickActive then table.insert(parts, "| 🛡️ Защита ВКЛ") else table.insert(parts, "| 🛡️ Защита ВЫКЛ") end
         if anchorGrabActive then table.insert(parts, "| ⚓ Заморозка ВКЛ") end
         if superThrowActive then table.insert(parts, "| ⚡ Super Throw ВКЛ") end
+        if jerkOffActive then table.insert(parts, "| 🔞 Jerk Off ВКЛ") end
         statusText.Text = table.concat(parts, " ")
     end
 end
@@ -121,69 +129,82 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СПАВН ТОЙ-СЮРИКЕНА ИЗ ЧАСТЕЙ) ===
+-- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (Anti-Kick) ===
 -- ========================================
 local antiKickConnection = nil
 local shurikenObject = nil
-local kickGrabConnections = {}
 
-local function spawnToy(position)
-    local toy = Instance.new("Model")
-    toy.Name = "ShurikenToy"
-    
-    local mainPart = Instance.new("Part")
-    mainPart.Size = Vector3.new(1.8, 0.2, 1.8)
-    mainPart.Shape = Enum.PartType.Block
-    mainPart.BrickColor = BrickColor.new("Bright blue")
-    mainPart.Material = Enum.Material.Neon
-    mainPart.Anchored = false
-    mainPart.CanCollide = true
-    mainPart.Parent = toy
-    toy.PrimaryPart = mainPart  -- обязательно для SetPrimaryPartCFrame
-    
-    -- Добавляем лопасти
-    for _, angle in ipairs({0, 90, 180, 270}) do
+local function spawnShuriken()
+    local shuriken = Instance.new("Part")
+    shuriken.Size = Vector3.new(1.8, 0.2, 1.8)
+    shuriken.Shape = Enum.PartType.Block
+    shuriken.BrickColor = BrickColor.new("Bright blue")
+    shuriken.Material = Enum.Material.Neon
+    shuriken.Anchored = false
+    shuriken.CanCollide = false
+    shuriken.CanQuery = false
+    shuriken.Transparency = 0.15
+    shuriken.Name = "IllusionShuriken"
+    shuriken.Parent = workspace
+
+    local angles = {0, 90, 180, 270}
+    for _, angle in ipairs(angles) do
         local blade = Instance.new("Part")
         blade.Size = Vector3.new(0.8, 0.2, 2.0)
         blade.Shape = Enum.PartType.Block
         blade.BrickColor = BrickColor.new("Bright blue")
         blade.Material = Enum.Material.Neon
         blade.Anchored = false
-        blade.CanCollide = true
-        blade.Parent = toy
-        blade.CFrame = mainPart.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
+        blade.CanCollide = false
+        blade.CanQuery = false
+        blade.Transparency = 0.2
+        blade.Name = "Blade"
+        blade.Parent = shuriken
+        blade.CFrame = shuriken.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
     end
-    
-    mainPart.Transparency = 0
-    local newToy = toy:Clone()
-    newToy.Parent = workspace
-    if position then
-        newToy:SetPrimaryPartCFrame(CFrame.new(position))
-    end
-    return newToy
+
+    local glow = Instance.new("SelectionBox")
+    glow.Adornee = shuriken
+    glow.Color3 = Color3.fromRGB(0, 150, 255)
+    glow.Transparency = 0.3
+    glow.LineThickness = 0.15
+    glow.Name = "Glow"
+    glow.Parent = shuriken
+
+    local particles = Instance.new("ParticleEmitter")
+    particles.Texture = "rbxassetid://7575379200"
+    particles.Rate = 20
+    particles.VelocityInheritance = 0
+    particles.Lifetime = NumberRange.new(1, 1.5)
+    particles.SpreadAngle = Vector2.new(360, 360)
+    particles.Rotation = NumberRange.new(0, 360)
+    particles.Transparency = NumberSequence.new(0.8, 0)
+    particles.Color = ColorSequence.new(Color3.fromRGB(0, 150, 255))
+    particles.Size = NumberSequence.new(0.5, 1)
+    particles.Parent = shuriken
+
+    return shuriken
 end
 
 local function startIllusion()
     if antiKickConnection then return end
 
-    -- Спавним сюрикен, если его нет
     if not shurikenObject then
-        local spawnPos = rootPart and rootPart.Position + Vector3.new(0, 2, 0) or Vector3.new(0, 10, 0)
-        shurikenObject = spawnToy(spawnPos)
-        print("[Иллюзия] Сюрикен-той создан в мире!")
+        shurikenObject = spawnShuriken()
     end
 
-    -- Основной цикл: телепортируем сюрикен в тело
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
         if not character or not character.Parent then return end
         if not rootPart then return end
 
-        if shurikenObject and shurikenObject.Parent then
-            shurikenObject:SetPrimaryPartCFrame(rootPart.CFrame * CFrame.new(0, 0.5, 0))
+        if shurikenObject then
+            shurikenObject.CFrame = rootPart.CFrame * CFrame.new(0, 0.5, 0)
+            shurikenObject.Velocity = Vector3.new(0, 0, 0)
+            shurikenObject.RotVelocity = Vector3.new(0, 0, 0)
+            shurikenObject.CFrame = shurikenObject.CFrame * CFrame.Angles(0, tick() * 2, 0)
         end
 
-        -- Удаляем объекты кика
         pcall(function()
             local kickScript = workspace:FindFirstChild("KickScript")
             if kickScript then kickScript:Destroy() end
@@ -203,35 +224,6 @@ local function startIllusion()
             if kickEvent then kickEvent:Destroy() end
         end)
     end)
-
-    -- Защита от кик-граба (FirePlayerPart)
-    local connection
-    connection = Workspace.ChildAdded:Connect(function(child)
-        if not antiKickActive then return end
-        if child.Name == "GrabParts" then
-            task.wait(0.1)
-            local grabPart = child:FindFirstChild("GrabPart")
-            if grabPart then
-                local weld = grabPart:FindFirstChild("WeldConstraint")
-                if weld and weld.Part1 then
-                    local primaryPart = weld.Part1
-                    if primaryPart.Name == "FirePlayerPart" then
-                        for _, childPart in ipairs(primaryPart:GetChildren()) do
-                            if childPart:IsA("BodyPosition") or childPart:IsA("BodyGyro") then
-                                childPart:Destroy()
-                            end
-                        end
-                        while workspace:FindFirstChild("GrabParts") do
-                            task.wait()
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    table.insert(kickGrabConnections, connection)
-
-    print("[Иллюзия] Защита включена (Той-сюрикен + антикик + антикик-граб)")
 end
 
 local function stopIllusion()
@@ -243,11 +235,6 @@ local function stopIllusion()
         shurikenObject:Destroy()
         shurikenObject = nil
     end
-    for _, conn in ipairs(kickGrabConnections) do
-        pcall(conn.Disconnect, conn)
-    end
-    kickGrabConnections = {}
-    print("[Иллюзия] Защита отключена")
 end
 
 -- ========================================
@@ -268,7 +255,6 @@ local function setSpeed()
         else
             if humanoid.WalkSpeed ~= 16 then humanoid.WalkSpeed = 16 end
         end
-        -- НЕ ТРОГАЕМ JUMPPOWER!
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
     end)
@@ -278,6 +264,45 @@ local function stopSpeedControl()
     if speedLoop then
         speedLoop:Disconnect()
         speedLoop = nil
+    end
+end
+
+-- ========================================
+-- === SUPER THROW ===
+-- ========================================
+local superThrowConnection = nil
+local superThrowStrength = 1200
+
+local function startSuperThrow()
+    if superThrowConnection then return end
+    superThrowConnection = Workspace.ChildAdded:Connect(function(child)
+        if not superThrowActive then return end
+        if child.Name ~= "GrabParts" then return end
+        local grabPart = child:FindFirstChild("GrabPart")
+        if not grabPart then return end
+        local weld = grabPart:FindFirstChild("WeldConstraint")
+        if not weld or not weld.Part1 then return end
+        local part = weld.Part1
+        if not part or not part:IsA("BasePart") then return end
+        local bodyVel = Instance.new("BodyVelocity")
+        bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        bodyVel.Velocity = Vector3.new(0, 0, 0)
+        local connection
+        connection = child:GetPropertyChangedSignal("Parent"):Connect(function()
+            if child.Parent == nil then
+                bodyVel.Velocity = Workspace.CurrentCamera.CFrame.LookVector * superThrowStrength
+                bodyVel.Parent = part
+                Debris:AddItem(bodyVel, 1)
+                if connection then connection:Disconnect() end
+            end
+        end)
+    end)
+end
+
+local function stopSuperThrow()
+    if superThrowConnection then
+        superThrowConnection:Disconnect()
+        superThrowConnection = nil
     end
 end
 
@@ -408,109 +433,69 @@ local function stopFling()
 end
 
 -- ========================================
--- === SUPER THROW ===
--- ========================================
-local superThrowConnection = nil
-local superThrowStrength = 1200
-
-local function startSuperThrow()
-    if superThrowConnection then return end
-    superThrowConnection = Workspace.ChildAdded:Connect(function(child)
-        if not superThrowActive then return end
-        if child.Name ~= "GrabParts" then return end
-        local grabPart = child:FindFirstChild("GrabPart")
-        if not grabPart then return end
-        local weld = grabPart:FindFirstChild("WeldConstraint")
-        if not weld or not weld.Part1 then return end
-        local part = weld.Part1
-        if not part or not part:IsA("BasePart") then return end
-        local bodyVel = Instance.new("BodyVelocity")
-        bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-        bodyVel.Velocity = Vector3.new(0, 0, 0)
-        local connection
-        connection = child:GetPropertyChangedSignal("Parent"):Connect(function()
-            if child.Parent == nil then
-                bodyVel.Velocity = Workspace.CurrentCamera.CFrame.LookVector * superThrowStrength
-                bodyVel.Parent = part
-                Debris:AddItem(bodyVel, 1)
-                if connection then connection:Disconnect() end
-            end
-        end)
-    end)
-end
-
-local function stopSuperThrow()
-    if superThrowConnection then
-        superThrowConnection:Disconnect()
-        superThrowConnection = nil
-    end
-end
-
--- ========================================
 -- === УВЕДОМЛЕНИЯ О КИКАХ ===
 -- ========================================
 local kickNotifierConnection = nil
 local notifiedPlayers = {}
 
-local function showKickNotification(playerName, characterToNotify)
-    if not characterToNotify or not characterToNotify.Parent then return end
-    local head = characterToNotify:FindFirstChild("Head")
-    if not head then return end
-    local billboard = Instance.new("BillboardGui")
-    billboard.Size = UDim2.new(0, 250, 0, 60)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.Parent = head
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
-    frame.BackgroundTransparency = 0.4
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(255, 0, 0)
-    frame.Parent = billboard
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 8)
-    frameCorner.Parent = frame
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "⚠️ " .. playerName .. " был кикнут!"
-    label.TextColor3 = Color3.fromRGB(255, 50, 50)
-    label.TextScaled = true
-    label.Font = Enum.Font.GothamBold
-    label.TextWrapped = true
-    label.Parent = frame
-    task.wait(4)
-    billboard:Destroy()
+local function playKickSound()
+    local s = Instance.new("Sound")
+    s.SoundId = "rbxassetid://79150789336480"
+    s.Volume = 5
+    s.PlayOnRemove = true
+    s.Parent = SoundService
+    s:Destroy()
+end
+
+local function notifyKick(displayName, username)
+    if statusText then
+        statusText.Text = "⚠️ " .. displayName .. " был кикнут!"
+        statusText.TextColor3 = Color3.fromRGB(255, 50, 50)
+        task.wait(3)
+        updateButtons()
+    end
+end
+
+local function getClosestPlayer(pos)
+    local closestPlr = nil
+    local closestDist = math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - pos).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closestPlr = plr
+                end
+            end
+        end
+    end
+    return closestPlr
 end
 
 local function startKickNotifier()
     if kickNotifierConnection then return end
     notifiedPlayers = {}
-    kickNotifierConnection = RunService.Heartbeat:Connect(function()
+
+    kickNotifierConnection = Workspace.ChildAdded:Connect(function(obj)
         if not kickNotifierActive then return end
-        pcall(function()
-            local blackHole = Workspace:FindFirstChild("BlackHole")
-            if not blackHole then return end
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then
-                    local char = plr.Character
-                    if char then
-                        local root = char:FindFirstChild("HumanoidRootPart")
-                        if root then
-                            local distance = (root.Position - blackHole.Position).Magnitude
-                            if distance < 20 and not notifiedPlayers[plr.UserId] then
-                                showKickNotification(plr.Name, char)
-                                notifiedPlayers[plr.UserId] = true
-                                print("[Уведомление] Игрок " .. plr.Name .. " был кикнут чёрной дырой!")
-                            end
-                            if distance >= 20 then
-                                notifiedPlayers[plr.UserId] = nil
-                            end
-                        end
-                    end
-                end
+        if obj.Name == "BlackHoleKick" or obj.Name == "BlackHoleDetected" then
+            task.wait(0.05)
+            local pos
+            if obj:IsA("BasePart") then
+                pos = obj.Position
+            elseif obj:IsA("Model") and obj.PrimaryPart then
+                pos = obj.PrimaryPart.Position
             end
-        end)
+            if not pos then return end
+            
+            local plr = getClosestPlayer(pos)
+            if not plr then return end
+            
+            playKickSound()
+            notifyKick(plr.DisplayName, plr.Name)
+        end
     end)
 end
 
@@ -520,6 +505,46 @@ local function stopKickNotifier()
         kickNotifierConnection = nil
     end
     notifiedPlayers = {}
+end
+
+-- ========================================
+-- === JERK OFF (ДЛЯ ТЕЛЕФОНА - КНОПКА В МЕНЮ) ===
+-- ========================================
+local jerkOffTrack = nil
+
+local function startJerkOff()
+    if not character or not character.Parent then return end
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = hum
+    end
+    
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://168268306"
+    
+    jerkOffTrack = animator:LoadAnimation(anim)
+    jerkOffTrack.Priority = Enum.AnimationPriority.Action
+    jerkOffTrack:Play()
+    
+    task.spawn(function()
+        while jerkOffActive do
+            task.wait(0.1)
+            if jerkOffTrack and jerkOffTrack.IsPlaying then
+                jerkOffTrack.TimePosition = 0.3
+            end
+        end
+    end)
+end
+
+local function stopJerkOff()
+    if jerkOffTrack then
+        jerkOffTrack:Stop()
+        jerkOffTrack = nil
+    end
 end
 
 -- ========================================
@@ -566,6 +591,12 @@ local function toggleSuperThrow()
     updateButtons()
 end
 
+local function toggleJerkOff()
+    jerkOffActive = not jerkOffActive
+    if jerkOffActive then startJerkOff() else stopJerkOff() end
+    updateButtons()
+end
+
 local function stopAll()
     stopFling()
     stopAntiGrab()
@@ -574,9 +605,11 @@ local function stopAll()
     stopAnchorGrab()
     stopKickNotifier()
     stopSuperThrow()
+    stopJerkOff()
     speedModeActive = false
     anchorGrabActive = false
     superThrowActive = false
+    jerkOffActive = false
     updateButtons()
     if statusText then
         statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
@@ -595,12 +628,12 @@ local function createGUI()
     screenGui.ResetOnSpawn = false
 
     mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 380, 0, 490)
-    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -245)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(10, 20, 40)
-    mainFrame.BackgroundTransparency = 0.15
+    mainFrame.Size = UDim2.new(0, 380, 0, 530)
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -265)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+    mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.fromRGB(0, 150, 255)
+    mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 180)
     mainFrame.Parent = screenGui
     mainFrame.Active = true
     mainFrame.Draggable = true
@@ -612,9 +645,10 @@ local function createGUI()
     -- Заголовок
     local titleBar = Instance.new("Frame")
     titleBar.Size = UDim2.new(1, 0, 0, 50)
-    titleBar.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
-    titleBar.BackgroundTransparency = 0.2
-    titleBar.BorderSizePixel = 0
+    titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 55)
+    titleBar.BackgroundTransparency = 0.3
+    titleBar.BorderSizePixel = 2
+    titleBar.BorderColor3 = Color3.fromRGB(80, 80, 180)
     titleBar.Parent = mainFrame
 
     local titleCorner = Instance.new("UICorner")
@@ -626,7 +660,7 @@ local function createGUI()
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = "💀 gakuka FTAP"
-    titleText.TextColor3 = Color3.fromRGB(0, 200, 255)
+    titleText.TextColor3 = Color3.fromRGB(200, 50, 200)
     titleText.Font = Enum.Font.GothamBold
     titleText.TextSize = 22
     titleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -636,8 +670,8 @@ local function createGUI()
     verText.Size = UDim2.new(1, -100, 0, 18)
     verText.Position = UDim2.new(0, 15, 0, 28)
     verText.BackgroundTransparency = 1
-    verText.Text = "v1.3 | СЮРИКЕН ТОЙ | СВОРАЧИВАНИЕ"
-    verText.TextColor3 = Color3.fromRGB(150, 200, 255)
+    verText.Text = "v2.0 | Уведомления о киках | Jerk Off"
+    verText.TextColor3 = Color3.fromRGB(255, 200, 100)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
     verText.TextXAlignment = Enum.TextXAlignment.Left
@@ -667,7 +701,7 @@ local function createGUI()
             mainFrame.Size = UDim2.new(0, 380, 0, 50)
             toggleBtn.Text = "+"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-            titleText.Text = "💀 gakuka FTAP [СВЁРНУТО]"
+            titleText.Text = "💀 gakuka [СВЁРНУТО]"
             titleText.TextColor3 = Color3.fromRGB(255, 200, 100)
             for _, child in ipairs(mainFrame:GetChildren()) do
                 if child ~= titleBar and child ~= toggleBtn then
@@ -675,11 +709,11 @@ local function createGUI()
                 end
             end
         else
-            mainFrame.Size = UDim2.new(0, 380, 0, 490)
+            mainFrame.Size = UDim2.new(0, 380, 0, 530)
             toggleBtn.Text = "−"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
             titleText.Text = "💀 gakuka FTAP"
-            titleText.TextColor3 = Color3.fromRGB(0, 200, 255)
+            titleText.TextColor3 = Color3.fromRGB(200, 50, 200)
             for _, child in ipairs(mainFrame:GetChildren()) do
                 child.Visible = true
             end
@@ -712,8 +746,8 @@ local function createGUI()
     -- СТАТУС
     statusText = Instance.new("TextLabel")
     statusText.Size = UDim2.new(0.92, 0, 0, 28)
-    statusText.Position = UDim2.new(0.04, 0, 0.13, 0)
-    statusText.BackgroundColor3 = Color3.fromRGB(0, 40, 80)
+    statusText.Position = UDim2.new(0.04, 0, 0.12, 0)
+    statusText.BackgroundColor3 = Color3.fromRGB(35, 35, 60)
     statusText.BackgroundTransparency = 0.5
     statusText.Text = "🔔 Уведомления ВКЛ | 🛡️ Защита ВКЛ"
     statusText.TextColor3 = Color3.fromRGB(100, 200, 255)
@@ -731,14 +765,14 @@ local function createGUI()
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0.88, 0, 0, 34)
         btn.Position = UDim2.new(0.06, 0, y, 0)
-        btn.BackgroundColor3 = color or Color3.fromRGB(0, 60, 120)
+        btn.BackgroundColor3 = color or Color3.fromRGB(50, 50, 80)
         btn.BackgroundTransparency = 0.3
         btn.Text = text
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         btn.Font = Enum.Font.GothamBold
         btn.TextSize = 14
         btn.BorderSizePixel = 1
-        btn.BorderColor3 = Color3.fromRGB(0, 150, 255)
+        btn.BorderColor3 = Color3.fromRGB(80, 80, 150)
         btn.Parent = mainFrame
 
         local c = Instance.new("UICorner")
@@ -749,32 +783,25 @@ local function createGUI()
         return btn
     end
 
-    local y = 0.19
+    local y = 0.17
 
     flingBtn = createBtn("💥 FLING GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        if flingActive then stopFling() else startFling() end
-        updateButtons()
+        toggleFling()
     end)
     y = y + 0.09
 
     antiBtn = createBtn("🛡️ ANTI-GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        antiGrabActive = not antiGrabActive
-        if antiGrabActive then startAntiGrab() else stopAntiGrab() end
-        updateButtons()
+        toggleAntiGrab()
     end)
     y = y + 0.09
 
     speedBtn = createBtn("🏃 ROBLOX EGOR [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        speedModeActive = not speedModeActive
-        setSpeed()
-        updateButtons()
+        toggleSpeed()
     end)
     y = y + 0.09
 
     anchorBtn = createBtn("⚓ ANCHOR GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        anchorGrabActive = not anchorGrabActive
-        if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
-        updateButtons()
+        toggleAnchorGrab()
     end)
     y = y + 0.09
 
@@ -790,6 +817,11 @@ local function createGUI()
 
     superBtn = createBtn("⚡ SUPER THROW [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
         toggleSuperThrow()
+    end)
+    y = y + 0.09
+
+    jerkBtn = createBtn("🔞 JERK OFF [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleJerkOff()
     end)
     y = y + 0.09
 
@@ -832,6 +864,7 @@ player.CharacterAdded:Connect(function(newChar)
     if antiKickActive then startIllusion() end
     if kickNotifierActive then startKickNotifier() end
     if superThrowActive then startSuperThrow() end
+    if jerkOffActive then startJerkOff() end
     if flingActive then
         stopFling()
         startFling()
@@ -843,16 +876,18 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP - ULTIMATE v1.3")
+print("  💀 gakuka FTAP - FINAL v2.0")
 print("  =================================")
 print("  🛡️ ANTI-GRAB - ВЫКЛЮЧЕН")
-print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ (ТОЙ-СЮРИКЕН + антикик + антикик-граб)")
+print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ")
 print("  🔔 УВЕДОМЛЕНИЯ О КИКЕ - ВКЛ")
 print("  ✅ ROBLOX EGOR - скорость 70")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
 print("  💥 FLING GRAB - все летают")
 print("  ⚡ SUPER THROW - при отпускании")
+print("  🔞 JERK OFF - кнопка в меню")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
 print("  ✅ ПРЫЖОК НОРМАЛЬНЫЙ")
 print("  ✅ СВОРАЧИВАНИЕ - кнопки скрываются")
+print("  ✅ ТЕЛЕФОН: всё работает через кнопки")
 print("====================================")
