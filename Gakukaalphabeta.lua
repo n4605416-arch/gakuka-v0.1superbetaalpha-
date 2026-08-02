@@ -1,6 +1,5 @@
--- gakuka FTAP v0.1 beta (исправленный)
--- Убрана лишняя кнопка "МЕНЮ"
--- Anti-Kick теперь спавнит сюрикен только если его нет или он не приклеен к телу
+-- gakuka FTAP v0.1 beta (с Anti-Kick Кирка)
+-- Добавлена функция Anti-Kick (Кирка): спавнит кирку на спину, защищает от удаления
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -61,6 +60,7 @@ local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
 local antiKickActive = false
+local antiKickPickaxeActive = false  -- <-- НОВАЯ ПЕРЕМЕННАЯ
 local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
@@ -125,7 +125,7 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- ANTI-KICK (ШУРИКЕН)
+-- ANTI-KICK (СЮРИКЕН)
 -- ========================================
 local antiKickConnection = nil
 
@@ -148,7 +148,6 @@ local function hasShurikenAttached()
     if not hrp then return false end
     local firePart = hrp:FindFirstChild("FirePlayerPart")
     if not firePart then return false end
-    -- Проверяем, есть ли у FirePlayerPart приклеенные части от сюрикена
     for _, child in ipairs(firePart:GetChildren()) do
         if child:IsA("Weld") or child:IsA("WeldConstraint") then
             local otherPart = child.Part0 or child.Part1
@@ -157,7 +156,6 @@ local function hasShurikenAttached()
             end
         end
     end
-    -- Альтернатива: проверить папку с игрушками на наличие приклеенного сюрикена
     local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
     if inv then
         local shuriken = inv:FindFirstChild("AntiKick")
@@ -175,10 +173,7 @@ local function startAntiKick()
     if antiKickConnection then return end
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
-        -- Если сюрикен уже приклеен, не спавним новый
-        if hasShurikenAttached() then
-            return
-        end
+        if hasShurikenAttached() then return end
         pcall(function()
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -228,6 +223,146 @@ local function stopAntiKick()
         antiKickConnection = nil
     end
     clearAntiKickShuriken()
+end
+
+-- ========================================
+-- ANTI-KICK (КИРКА) - НОВАЯ ФУНКЦИЯ
+-- ========================================
+local antiKickPickaxeConnection = nil
+local pickaxeWeld = nil
+
+local function clearAntiKickPickaxe()
+    local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
+    local destroyrem = ReplicatedStorage:FindFirstChild("MenuToys") and ReplicatedStorage.MenuToys:FindFirstChild("DestroyToy")
+    if inv and destroyrem then
+        for _, v in pairs(inv:GetChildren()) do
+            if v.Name == "AntiKickPickaxe" or v.Name == "Pickaxe" then
+                pcall(function() destroyrem:FireServer(v) end)
+            end
+        end
+    end
+    if pickaxeWeld then
+        pcall(function() pickaxeWeld:Destroy() end)
+        pickaxeWeld = nil
+    end
+end
+
+local function hasPickaxeAttached()
+    local char = player.Character
+    if not char then return false end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    -- Проверяем, есть ли Weld от кирки
+    for _, weld in ipairs(hrp:GetChildren()) do
+        if weld:IsA("Weld") and weld.Name == "PickaxeWeld" then
+            local part0 = weld.Part0
+            if part0 and part0.Parent and part0.Parent.Name == "AntiKickPickaxe" then
+                return true
+            end
+        end
+    end
+    -- Проверяем папку игрушек
+    local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
+    if inv then
+        local pickaxe = inv:FindFirstChild("AntiKickPickaxe")
+        if pickaxe then
+            -- Если есть Weld к персонажу, считаем что приклеена
+            for _, weld in ipairs(pickaxe:GetDescendants()) do
+                if weld:IsA("Weld") and (weld.Part0 == hrp or weld.Part1 == hrp) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function attachPickaxeToBack(pickaxe)
+    if not pickaxe or not pickaxe.Parent then return end
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Найдём основную часть кирки (обычно это Handle или PrimaryPart)
+    local mainPart = pickaxe:FindFirstChild("Handle") or pickaxe:FindFirstChild("PrimaryPart") or pickaxe:FindFirstChildWhichIsA("BasePart")
+    if not mainPart then return end
+    
+    -- Создаём Weld для прикрепления к спине
+    if pickaxeWeld then pcall(function() pickaxeWeld:Destroy() end) end
+    pickaxeWeld = Instance.new("Weld")
+    pickaxeWeld.Name = "PickaxeWeld"
+    pickaxeWeld.Part0 = hrp
+    pickaxeWeld.Part1 = mainPart
+    -- Позиционируем на спине (смещение назад и немного вверх)
+    pickaxeWeld.C0 = CFrame.new(0, 0, -1.5) * CFrame.Angles(math.rad(20), 0, 0) -- за спиной, немного наклон
+    pickaxeWeld.Parent = hrp
+    pickaxeWeld.Enabled = true
+    
+    -- Делаем кирку невидимой для других (но не полностью, можно оставить видимой)
+    -- Защита от взятия другими: устанавливаем NetworkOwner
+    local setOwner = ReplicatedStorage:FindFirstChild("GrabEvents") and ReplicatedStorage.GrabEvents:FindFirstChild("SetNetworkOwner")
+    if setOwner then
+        pcall(function()
+            setOwner:FireServer(mainPart, mainPart.CFrame)
+        end)
+    end
+    
+    -- Делаем части неколлизионными и невидимыми для касаний (опционально)
+    for _, obj in pairs(pickaxe:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.CanTouch = false
+            obj.CanCollide = false
+            obj.CanQuery = false
+        end
+    end
+    
+    pickaxe.Name = "AntiKickPickaxe"
+end
+
+local function startAntiKickPickaxe()
+    if antiKickPickaxeConnection then return end
+    
+    antiKickPickaxeConnection = RunService.Heartbeat:Connect(function()
+        if not antiKickPickaxeActive then return end
+        -- Если кирка уже приклеена, не спавним новую
+        if hasPickaxeAttached() then
+            return
+        end
+        
+        pcall(function()
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+            local hrp = char.HumanoidRootPart
+            local canSpawn = player:FindFirstChild("CanSpawnToy")
+            if not canSpawn or not canSpawn.Value then return end
+            
+            local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
+            local pickaxe = inv and inv:FindFirstChild("Pickaxe")
+            if not pickaxe then
+                local spawnRemote = ReplicatedStorage.MenuToys.SpawnToyRemoteFunction
+                pcall(function()
+                    spawnRemote:InvokeServer("Pickaxe", hrp.CFrame * CFrame.new(0, 5, 0), Vector3.new())
+                end)
+                task.wait(0.2)
+                inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
+                pickaxe = inv and inv:FindFirstChild("Pickaxe")
+            end
+            if pickaxe then
+                attachPickaxeToBack(pickaxe)
+            end
+        end)
+    end)
+    
+    -- Дополнительная защита от удаления: если кирку удалили, она пересоздастся в цикле
+end
+
+local function stopAntiKickPickaxe()
+    if antiKickPickaxeConnection then
+        antiKickPickaxeConnection:Disconnect()
+        antiKickPickaxeConnection = nil
+    end
+    clearAntiKickPickaxe()
 end
 
 -- ========================================
@@ -553,6 +688,7 @@ local function stopAll()
     stopAntiGrab()
     stopSpeedControl()
     stopAntiKick()
+    stopAntiKickPickaxe()  -- <-- останавливаем кирку
     stopAnchorGrab()
     stopKickNotifier()
     stopSuperThrow()
@@ -562,6 +698,7 @@ local function stopAll()
     anchorGrabActive = false
     superThrowActive = false
     jerkOffActive = false
+    antiKickPickaxeActive = false
     Library:Notify({
         Title = "⛔ Всё остановлено",
         Description = "Все функции отключены",
@@ -611,11 +748,20 @@ DefenseGroup:AddToggle("AntiGrabToggle", {
 })
 
 DefenseGroup:AddToggle("AntiKickToggle", {
-    Text = "🔮 ANTI-KICK",
+    Text = "🔮 ANTI-KICK (СЮРИКЕН)",
     Default = false,
     Callback = function(value)
         antiKickActive = value
         if value then startAntiKick() else stopAntiKick() end
+    end
+})
+
+DefenseGroup:AddToggle("AntiKickPickaxeToggle", {
+    Text = "🔨 ANTI-KICK (КИРКА)",
+    Default = false,
+    Callback = function(value)
+        antiKickPickaxeActive = value
+        if value then startAntiKickPickaxe() else stopAntiKickPickaxe() end
     end
 })
 
@@ -666,6 +812,7 @@ MiscGroup:AddButton({
         Toggles.SuperThrowToggle:SetValue(false)
         Toggles.AntiGrabToggle:SetValue(false)
         Toggles.AntiKickToggle:SetValue(false)
+        Toggles.AntiKickPickaxeToggle:SetValue(false)
         Toggles.NotifierToggle:SetValue(true)
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
@@ -702,7 +849,7 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 -- ИНИЦИАЛИЗАЦИЯ
 -- ========================================
 setSpeed()
-startKickNotifier() -- уведомления включены по умолчанию
+startKickNotifier()
 
 -- Постоянный контроль
 local function tick()
@@ -723,6 +870,7 @@ player.CharacterAdded:Connect(function(newChar)
     setSpeed()
     if antiGrabActive then startAntiGrab() end
     if antiKickActive then startAntiKick() end
+    if antiKickPickaxeActive then startAntiKickPickaxe() end
     if kickNotifierActive then startKickNotifier() end
     if superThrowActive then startSuperThrow() end
     if jerkOffActive then startJerkOff() end
@@ -735,8 +883,8 @@ print("====================================")
 print("  💀 gakuka FTAP v0.1 beta")
 print("  =================================")
 print("  ✅ Меню в стиле Ragalic Mobile")
-print("  ✅ Anti-Kick по умолчанию ВЫКЛЮЧЕН")
-print("  ✅ Anti-Kick спавнит сюрикен только если он не приклеен")
-print("  ✅ Убрана лишняя кнопка МЕНЮ")
-print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK, ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
+print("  ✅ Anti-Kick (Сюрикен) - выключен по умолчанию")
+print("  ✅ Anti-Kick (Кирка) - выключена по умолчанию")
+print("  ✅ Кирка цепляется на спину и защищена от удаления")
+print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK (2 вида), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
 print("====================================")
