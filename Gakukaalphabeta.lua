@@ -1,12 +1,15 @@
--- gakuka FTAP - Raufield Style v1.3 (Полная версия с уведомлениями о киках)
+-- gakuka FTAP - Raufield Style v1.3 (Super Throw добавлен)
 -- Меню в стиле Raufield (сине-голубая тема)
 -- Anti-Kick из Venom X Hub (защита от кика и кик-граба)
 -- Уведомления о киках: BillboardGui над кикнутым игроком + лог в консоль
+-- ROBLOX EGOR: принудительное удержание скорости 70 через Heartbeat
+-- SUPER THROW: кидает игроков/предметы при отпускании захвата (Grab)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 local player = Players.LocalPlayer
 
 if not player then return end
@@ -22,12 +25,13 @@ local speedModeActive = false
 local anchorGrabActive = false
 local antiKickActive = true
 local kickNotifierActive = true
+local superThrowActive = false          -- <-- НОВОЕ СОСТОЯНИЕ
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
 
 -- ===== КНОПКИ =====
-local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, stopBtn, statusText
+local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, superBtn, stopBtn, statusText
 
 -- ========================================
 -- === ANTI-KICK ИЗ VENOM X HUB ===
@@ -41,15 +45,12 @@ local function startAntiKick()
     antiKickCoroutine = coroutine.create(function()
         while antiKickActive do
             pcall(function()
-                -- 1. Удаляем KickScript из Workspace
                 local kickScript = workspace:FindFirstChild("KickScript")
                 if kickScript then kickScript:Destroy() end
 
-                -- 2. Удаляем KickScript из персонажа
                 local charKick = character:FindFirstChild("KickScript")
                 if charKick then charKick:Destroy() end
 
-                -- 3. Удаляем GrabPart с атрибутом Kick
                 local grabParts = workspace:FindFirstChild("GrabParts")
                 if grabParts then
                     local grabPart = grabParts:FindFirstChild("GrabPart")
@@ -58,7 +59,6 @@ local function startAntiKick()
                     end
                 end
 
-                -- 4. Удаляем KickEvent из ReplicatedStorage
                 local kickEvent = ReplicatedStorage:FindFirstChild("KickEvent")
                 if kickEvent then kickEvent:Destroy() end
             end)
@@ -67,7 +67,6 @@ local function startAntiKick()
     end)
     coroutine.resume(antiKickCoroutine)
 
-    -- Защита от кик-граба
     local connection
     connection = Workspace.ChildAdded:Connect(function(child)
         if not antiKickActive then return end
@@ -111,20 +110,18 @@ end
 -- === УВЕДОМЛЕНИЯ О КИКАХ (BillboardGui) ===
 -- ========================================
 local kickNotifierConnection = nil
-local notifiedPlayers = {} -- чтобы не спамить уведомлениями повторно
+local notifiedPlayers = {}
 
 local function showKickNotification(playerName, characterToNotify)
     if not characterToNotify or not characterToNotify.Parent then return end
     local head = characterToNotify:FindFirstChild("Head")
     if not head then return end
 
-    -- Создаём BillboardGui
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 250, 0, 60)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.Parent = head
 
-    -- Фон уведомления
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
@@ -136,7 +133,6 @@ local function showKickNotification(playerName, characterToNotify)
     frameCorner.CornerRadius = UDim.new(0, 8)
     frameCorner.Parent = frame
 
-    -- Текст
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
@@ -147,7 +143,6 @@ local function showKickNotification(playerName, characterToNotify)
     label.TextWrapped = true
     label.Parent = frame
 
-    -- Автоудаление через 4 секунды
     task.wait(4)
     billboard:Destroy()
 end
@@ -155,18 +150,15 @@ end
 local function startKickNotifier()
     if kickNotifierConnection then return end
 
-    -- Очищаем список уведомлённых при перезапуске
     notifiedPlayers = {}
 
     kickNotifierConnection = RunService.Heartbeat:Connect(function()
         if not kickNotifierActive then return end
 
         pcall(function()
-            -- Ищем чёрную дыру
             local blackHole = Workspace:FindFirstChild("BlackHole")
             if not blackHole then return end
 
-            -- Проверяем всех игроков
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr ~= player then
                     local char = plr.Character
@@ -174,14 +166,11 @@ local function startKickNotifier()
                         local root = char:FindFirstChild("HumanoidRootPart")
                         if root then
                             local distance = (root.Position - blackHole.Position).Magnitude
-                            -- Если игрок в радиусе чёрной дыры и его ещё не уведомили
                             if distance < 20 and not notifiedPlayers[plr.UserId] then
-                                -- Показываем уведомление
                                 showKickNotification(plr.Name, char)
                                 notifiedPlayers[plr.UserId] = true
                                 print("[Уведомление] Игрок " .. plr.Name .. " был кикнут чёрной дырой!")
                             end
-                            -- Если игрок вышел из радиуса, разрешаем уведомить снова (если вернётся)
                             if distance >= 20 then
                                 notifiedPlayers[plr.UserId] = nil
                             end
@@ -199,6 +188,93 @@ local function stopKickNotifier()
         kickNotifierConnection = nil
     end
     notifiedPlayers = {}
+end
+
+-- ========================================
+-- === ROBLOX EGOR (ПРИНУДИТЕЛЬНАЯ СКОРОСТЬ 70) ===
+-- ========================================
+local speedLoop = nil
+
+local function setSpeed()
+    if speedLoop then
+        speedLoop:Disconnect()
+        speedLoop = nil
+    end
+
+    speedLoop = RunService.Heartbeat:Connect(function()
+        if not character or not character.Parent then return end
+        if not humanoid then return end
+
+        if speedModeActive then
+            if humanoid.WalkSpeed ~= 70 then
+                humanoid.WalkSpeed = 70
+            end
+        else
+            if humanoid.WalkSpeed ~= 16 then
+                humanoid.WalkSpeed = 16
+            end
+        end
+
+        humanoid.JumpPower = 50
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+    end)
+end
+
+local function stopSpeedControl()
+    if speedLoop then
+        speedLoop:Disconnect()
+        speedLoop = nil
+    end
+end
+
+-- ========================================
+-- === SUPER THROW (НА ОТПУСКАНИЕ GRAB) ===
+-- ========================================
+local superThrowConnection = nil
+local superThrowStrength = 1200  -- сила броска (можно настроить)
+
+local function startSuperThrow()
+    if superThrowConnection then return end
+
+    superThrowConnection = Workspace.ChildAdded:Connect(function(child)
+        if not superThrowActive then return end
+        if child.Name ~= "GrabParts" then return end
+
+        -- Ждём появления GrabPart и WeldConstraint
+        local grabPart = child:FindFirstChild("GrabPart")
+        if not grabPart then return end
+
+        local weld = grabPart:FindFirstChild("WeldConstraint")
+        if not weld or not weld.Part1 then return end
+
+        local part = weld.Part1
+        if not part or not part:IsA("BasePart") then return end
+
+        -- Создаём BodyVelocity для броска
+        local bodyVel = Instance.new("BodyVelocity")
+        bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        bodyVel.Velocity = Vector3.new(0, 0, 0)
+
+        -- Слушаем момент удаления GrabParts (когда отпускают)
+        local connection
+        connection = child:GetPropertyChangedSignal("Parent"):Connect(function()
+            if child.Parent == nil then
+                -- Отпустили — применяем бросок
+                bodyVel.Velocity = Workspace.CurrentCamera.CFrame.LookVector * superThrowStrength
+                bodyVel.Parent = part
+                Debris:AddItem(bodyVel, 1)  -- автоудаление через 1 секунду
+                if connection then connection:Disconnect() end
+            end
+        end)
+    end)
+end
+
+local function stopSuperThrow()
+    if superThrowConnection then
+        superThrowConnection:Disconnect()
+        superThrowConnection = nil
+    end
 end
 
 -- ========================================
@@ -335,30 +411,6 @@ local function stopIllusion()
 end
 
 -- ========================================
--- === ROBLOX EGOR ===
--- ========================================
-local speedLoop = nil
-
-local function setSpeed()
-    if not humanoid then return end
-    if speedLoop then speedLoop:Disconnect() end
-    speedLoop = RunService.Heartbeat:Connect(function()
-        if not character or not character.Parent then return end
-        if speedModeActive then
-            if humanoid.WalkSpeed ~= 70 then humanoid.WalkSpeed = 70 end
-        else
-            if humanoid.WalkSpeed ~= 16 then humanoid.WalkSpeed = 16 end
-        end
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-    end)
-end
-
-local function stopSpeedControl()
-    if speedLoop then speedLoop:Disconnect(); speedLoop = nil end
-end
-
--- ========================================
 -- === ANCHOR GRAB ===
 -- ========================================
 local function freezeObject(object)
@@ -446,7 +498,7 @@ local function stopAnchorGrab()
 end
 
 -- ========================================
--- === FLING GRAB ===
+-- === FLING GRAB (ОБЫЧНЫЙ ФЛИНГ) ===
 -- ========================================
 local flingConn = nil
 
@@ -481,43 +533,6 @@ local function stopFling()
     if flingConn then
         flingConn:Disconnect()
         flingConn = nil
-    end
-end
-
--- ========================================
--- === ОБНОВЛЕНИЕ КНОПОК ===
--- ========================================
-local function updateAllButtons()
-    if flingBtn then
-        flingBtn.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
-        flingBtn.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
-    end
-    if antiBtn then
-        antiBtn.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-        antiBtn.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-    end
-    if speedBtn then
-        speedBtn.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
-        speedBtn.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
-    end
-    if anchorBtn then
-        anchorBtn.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-        anchorBtn.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
-    end
-    if kickBtn then
-        kickBtn.Text = "🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
-        kickBtn.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-    end
-    if notifierBtn then
-        notifierBtn.Text = "🔔 УВЕДОМЛЕНИЯ О КИКЕ " .. (kickNotifierActive and "[ВКЛ]" or "[ВЫКЛ]")
-        notifierBtn.BackgroundColor3 = kickNotifierActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-    end
-    if statusText then
-        local parts = {}
-        if kickNotifierActive then table.insert(parts, "🔔 Уведомления ВКЛ") else table.insert(parts, "🔕 Уведомления ВЫКЛ") end
-        if antiKickActive then table.insert(parts, "| 🛡️ Защита ВКЛ") else table.insert(parts, "| 🛡️ Защита ВЫКЛ") end
-        if anchorGrabActive then table.insert(parts, "| ⚓ Заморозка ВКЛ") end
-        statusText.Text = table.concat(parts, " ")
     end
 end
 
@@ -559,6 +574,12 @@ local function toggleNotifier()
     updateAllButtons()
 end
 
+local function toggleSuperThrow()
+    superThrowActive = not superThrowActive
+    if superThrowActive then startSuperThrow() else stopSuperThrow() end
+    updateAllButtons()
+end
+
 local function stopAll()
     stopFling()
     stopAntiGrab()
@@ -566,12 +587,56 @@ local function stopAll()
     stopAntiKick()
     stopAnchorGrab()
     stopKickNotifier()
+    stopSuperThrow()
     speedModeActive = false
     anchorGrabActive = false
+    superThrowActive = false
     updateAllButtons()
     if statusText then
         statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
         statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end
+
+-- ========================================
+-- === ОБНОВЛЕНИЕ КНОПОК ===
+-- ========================================
+local function updateAllButtons()
+    if flingBtn then
+        flingBtn.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
+        flingBtn.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
+    end
+    if antiBtn then
+        antiBtn.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+        antiBtn.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+    end
+    if speedBtn then
+        speedBtn.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
+        speedBtn.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
+    end
+    if anchorBtn then
+        anchorBtn.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+        anchorBtn.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
+    end
+    if kickBtn then
+        kickBtn.Text = "🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
+        kickBtn.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+    end
+    if notifierBtn then
+        notifierBtn.Text = "🔔 УВЕДОМЛЕНИЯ О КИКЕ " .. (kickNotifierActive and "[ВКЛ]" or "[ВЫКЛ]")
+        notifierBtn.BackgroundColor3 = kickNotifierActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+    end
+    if superBtn then
+        superBtn.Text = "⚡ SUPER THROW " .. (superThrowActive and "[ВКЛ]" or "[ВЫКЛ]")
+        superBtn.BackgroundColor3 = superThrowActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
+    end
+    if statusText then
+        local parts = {}
+        if kickNotifierActive then table.insert(parts, "🔔 Уведомления ВКЛ") else table.insert(parts, "🔕 Уведомления ВЫКЛ") end
+        if antiKickActive then table.insert(parts, "| 🛡️ Защита ВКЛ") else table.insert(parts, "| 🛡️ Защита ВЫКЛ") end
+        if anchorGrabActive then table.insert(parts, "| ⚓ Заморозка ВКЛ") end
+        if superThrowActive then table.insert(parts, "| ⚡ Super Throw ВКЛ") end
+        statusText.Text = table.concat(parts, " ")
     end
 end
 
@@ -586,8 +651,8 @@ local function createGUI()
     screenGui.ResetOnSpawn = false
 
     mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 380, 0, 440)
-    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -220)
+    mainFrame.Size = UDim2.new(0, 380, 0, 480)  -- чуть выше, чтобы поместилась новая кнопка
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -240)
     mainFrame.BackgroundColor3 = Color3.fromRGB(10, 20, 40)
     mainFrame.BackgroundTransparency = 0.15
     mainFrame.BorderSizePixel = 2
@@ -627,7 +692,7 @@ local function createGUI()
     verText.Size = UDim2.new(1, -60, 0, 18)
     verText.Position = UDim2.new(0, 15, 0, 28)
     verText.BackgroundTransparency = 1
-    verText.Text = "v1.3 | Raufield Style + Notify"
+    verText.Text = "v1.3 | Raufield Style + Super Throw"
     verText.TextColor3 = Color3.fromRGB(150, 200, 255)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
@@ -660,7 +725,7 @@ local function createGUI()
     -- СТАТУС
     statusText = Instance.new("TextLabel")
     statusText.Size = UDim2.new(0.92, 0, 0, 28)
-    statusText.Position = UDim2.new(0.04, 0, 0.14, 0)
+    statusText.Position = UDim2.new(0.04, 0, 0.13, 0)
     statusText.BackgroundColor3 = Color3.fromRGB(0, 40, 80)
     statusText.BackgroundTransparency = 0.5
     statusText.Text = "🔔 Уведомления ВКЛ | 🛡️ Защита ВКЛ"
@@ -697,37 +762,42 @@ local function createGUI()
         return btn
     end
 
-    local y = 0.20
+    local y = 0.19
 
     flingBtn = createBtn("💥 FLING GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
         toggleFling()
     end)
-    y = y + 0.10
+    y = y + 0.09
 
     antiBtn = createBtn("🛡️ ANTI-GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
         toggleAntiGrab()
     end)
-    y = y + 0.10
+    y = y + 0.09
 
     speedBtn = createBtn("🏃 ROBLOX EGOR [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
         toggleSpeed()
     end)
-    y = y + 0.10
+    y = y + 0.09
 
     anchorBtn = createBtn("⚓ ANCHOR GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
         toggleAnchorGrab()
     end)
-    y = y + 0.10
+    y = y + 0.09
 
     kickBtn = createBtn("🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ [ВКЛ]", y, Color3.fromRGB(0, 180, 0), function()
         toggleIllusion()
     end)
-    y = y + 0.10
+    y = y + 0.09
 
     notifierBtn = createBtn("🔔 УВЕДОМЛЕНИЯ О КИКЕ [ВКЛ]", y, Color3.fromRGB(0, 180, 0), function()
         toggleNotifier()
     end)
-    y = y + 0.10
+    y = y + 0.09
+
+    superBtn = createBtn("⚡ SUPER THROW [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleSuperThrow()
+    end)
+    y = y + 0.09
 
     stopBtn = createBtn("⛔ ОСТАНОВИТЬ ВСЁ", y, Color3.fromRGB(150, 0, 30), function()
         stopAll()
@@ -767,6 +837,7 @@ player.CharacterAdded:Connect(function(newChar)
     if antiGrabActive then startAntiGrab() end
     if antiKickActive then startAntiKick() end
     if kickNotifierActive then startKickNotifier() end
+    if superThrowActive then startSuperThrow() end
     if flingActive then
         stopFling()
         startFling()
@@ -783,8 +854,9 @@ print("  =================================")
 print("  🛡️ ANTI-GRAB - БЕЗ БЛОКИРОВКИ")
 print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ")
 print("  🔔 УВЕДОМЛЕНИЯ О КИКЕ - ВКЛ")
-print("  ✅ ROBLOX EGOR - скорость 70")
+print("  ✅ ROBLOX EGOR - скорость 70 (FIXED)")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
 print("  💥 FLING GRAB - все летают")
+print("  ⚡ SUPER THROW - при отпускании захвата")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
 print("====================================")
