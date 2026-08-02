@@ -1,33 +1,15 @@
--- gakuka FTAP v0.1 beta (исправленная, без геймпасса)
--- Все функции стабильны, меню как было
+-- gakuka FTAP v0.1 beta (Anti-Lag исправлен)
+-- Anti-Lag: удаляет линии захвата у всех (кроме себя) и замораживает головы (отключает Neck)
+-- Головы не вращаются, но двигаются с телом
 
--- Загрузка библиотеки Obsidian с проверкой
+-- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library, ThemeManager, SaveManager
-
-local function loadLibrary()
-    local success, result = pcall(function()
-        Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-        ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-        SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
-    end)
-    if not success or not Library then
-        warn("[gakuka] Ошибка загрузки библиотеки Obsidian:", result)
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Ошибка",
-            Text = "Не удалось загрузить библиотеку. Проверьте интернет.",
-            Duration = 5,
-        })
-        return false
-    end
-    return true
-end
-
-if not loadLibrary() then return end
-
-Library.ForceCheckbox = false
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 local Options = Library.Options
 local Toggles = Library.Toggles
+Library.ForceCheckbox = false
 
 -- Создание окна
 local Window = Library:CreateWindow({
@@ -89,17 +71,15 @@ local thirdPersonActive = false
 local antiLagActive = false
 local frozenObjects = {}
 
--- Утилиты
+-- ========================================
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- ========================================
 local function notify(title, content, duration)
-    if Library then
-        Library:Notify({
-            Title = title or "Notification",
-            Description = content or "",
-            Time = duration or 5,
-        })
-    else
-        warn("[gakuka] Уведомление:", title, content)
-    end
+    Library:Notify({
+        Title = title or "Notification",
+        Description = content or "",
+        Time = duration or 5,
+    })
 end
 
 -- ========================================
@@ -615,7 +595,7 @@ local function stopAnchorGrab()
 end
 
 -- ========================================
--- FLING GRAB (С ЗАЩИТОЙ ОТ СОСКАЛЬЗЫВАНИЯ)
+-- FLING GRAB
 -- ========================================
 local flingConn = nil
 
@@ -694,12 +674,49 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- ANTI-LAG
+-- ГЕЙМПАСС FURTHER REACH
+-- ========================================
+local function buyFurtherReach()
+    local gamepassEvents = ReplicatedStorage:FindFirstChild("GamepassEvents")
+    if not gamepassEvents then
+        notify("Ошибка", "GamepassEvents не найдены", 3)
+        return
+    end
+    
+    local buyRemote = gamepassEvents:FindFirstChild("BuyGamepass")
+    local purchaseRemote = gamepassEvents:FindFirstChild("PurchaseGamepass")
+    local checkRemote = gamepassEvents:FindFirstChild("CheckForGamepass")
+    
+    local gamepassId = 20837132
+    
+    if buyRemote then
+        pcall(function()
+            buyRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif purchaseRemote then
+        pcall(function()
+            purchaseRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif checkRemote then
+        pcall(function()
+            checkRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Проверка геймпасса выполнена", 3)
+        end)
+    else
+        notify("Ошибка", "Не найден Remote для покупки геймпасса", 3)
+    end
+end
+
+-- ========================================
+-- ANTI-LAG (ИСПРАВЛЕННЫЙ)
 -- ========================================
 local antiLagConnection = nil
 local antiLagDescendantConn = nil
-local neckStates = {}
+local neckStates = {}  -- храним оригинальные состояния Neck
 
+-- Функция удаления линий в Workspace
 local function removeLines()
     pcall(function()
         for _, v in ipairs(Workspace:GetDescendants()) do
@@ -712,6 +729,7 @@ local function removeLines()
     end)
 end
 
+-- Подписка на новые объекты для удаления линий
 local function watchNewLines()
     if antiLagDescendantConn then return end
     antiLagDescendantConn = Workspace.DescendantAdded:Connect(function(obj)
@@ -754,11 +772,18 @@ end
 
 local function startAntiLag()
     if antiLagConnection then return end
+    
+    -- Удаляем линии сразу
     removeLines()
+    -- Начинаем следить за новыми
     watchNewLines()
+    
+    -- Замораживаем головы
     freezeHeads()
+    
     antiLagConnection = RunService.Heartbeat:Connect(function()
         if not antiLagActive then return
+        -- Периодически удаляем линии (на случай если что-то появилось)
         removeLines()
         freezeHeads()
     end)
@@ -774,6 +799,7 @@ local function stopAntiLag()
         antiLagDescendantConn = nil
     end
     unfreezeHeads()
+    -- Линии не восстанавливаем, они появятся при новых грабах
 end
 
 -- ========================================
@@ -913,7 +939,7 @@ MiscGroup:AddToggle("JerkOffToggle", {
 MiscGroup:AddButton({
     Text = "ГЕЙМПАСС FURTHER REACH",
     Func = function()
-        notify("Геймпасс", "Функция временно недоступна", 3)
+        buyFurtherReach()
     end
 })
 
@@ -997,8 +1023,9 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta (стабильная)")
+print("  gakuka FTAP v0.1 beta (Anti-Lag исправлен)")
 print("  =================================")
-print("  Все функции работают")
-print("  Геймпасс заменён на заглушку")
+print("  Anti-Lag: удаляет линии у всех (кроме себя)")
+print("  и замораживает головы (отключает Neck)")
+print("  Головы не вращаются, но двигаются с телом")
 print("====================================")
