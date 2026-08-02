@@ -1,8 +1,7 @@
--- gakuka FTAP v0.1 beta (Anti-Lag исправлен)
--- Anti-Lag: удаляет линии захвата у всех (кроме себя) и замораживает головы (отключает Neck)
--- Головы не вращаются, но двигаются с телом
+-- gakuka FTAP v0.1 beta (с Anti-Lag)
+-- Добавлена функция Anti-Lag: удаляет линии захвата и замораживает головы всех игроков (кроме себя)
 
--- Загрузка библиотеки Obsidian
+-- Загрузка библиотеки Obsidian с широкими уведомлениями
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -68,7 +67,7 @@ local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
 local thirdPersonActive = false
-local antiLagActive = false
+local antiLagActive = false      -- <-- НОВОЕ СОСТОЯНИЕ
 local frozenObjects = {}
 
 -- ========================================
@@ -710,82 +709,84 @@ local function buyFurtherReach()
 end
 
 -- ========================================
--- ANTI-LAG (ИСПРАВЛЕННЫЙ)
+-- ANTI-LAG (НОВАЯ ФУНКЦИЯ)
 -- ========================================
 local antiLagConnection = nil
-local antiLagDescendantConn = nil
-local neckStates = {}  -- храним оригинальные состояния Neck
+local frozenHeads = {}   -- для хранения оригинальных свойств голов
 
--- Функция удаления линий в Workspace
-local function removeLines()
-    pcall(function()
-        for _, v in ipairs(Workspace:GetDescendants()) do
-            if v:IsA("Beam") then
-                v:Destroy()
-            elseif v:IsA("BasePart") and v.Name:lower():find("line") then
-                v:Destroy()
-            end
-        end
-    end)
-end
-
--- Подписка на новые объекты для удаления линий
-local function watchNewLines()
-    if antiLagDescendantConn then return end
-    antiLagDescendantConn = Workspace.DescendantAdded:Connect(function(obj)
-        if not antiLagActive then return
-        if obj:IsA("Beam") or (obj:IsA("BasePart") and obj.Name:lower():find("line")) then
-            task.defer(function()
-                if obj and obj.Parent then
-                    obj:Destroy()
-                end
-            end)
-        end
-    end)
-end
-
-local function freezeHeads()
+local function freezeAllHeads()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
             local char = plr.Character
             if char then
-                local neck = char:FindFirstChild("Neck")
-                if neck and neck:IsA("Motor6D") then
-                    if not neckStates[neck] then
-                        neckStates[neck] = neck.Enabled
+                local head = char:FindFirstChild("Head")
+                if head and head:IsA("BasePart") then
+                    if not frozenHeads[head] then
+                        frozenHeads[head] = {
+                            Anchored = head.Anchored,
+                            CanCollide = head.CanCollide,
+                            CFrame = head.CFrame,
+                        }
                     end
-                    neck.Enabled = false
+                    head.Anchored = true
+                    head.CanCollide = true
+                    head.CFrame = frozenHeads[head].CFrame
+                    -- Также отключаем обновление поворота головы через Neck
+                    local neck = char:FindFirstChild("Neck")
+                    if neck and neck:IsA("Motor6D") then
+                        neck.Enabled = false
+                    end
                 end
             end
         end
     end
 end
 
-local function unfreezeHeads()
-    for neck, enabled in pairs(neckStates) do
-        if neck and neck.Parent then
-            neck.Enabled = enabled
+local function unfreezeAllHeads()
+    for head, data in pairs(frozenHeads) do
+        if head and head.Parent then
+            head.Anchored = data.Anchored or false
+            head.CanCollide = data.CanCollide or true
+            local char = head.Parent
+            if char then
+                local neck = char:FindFirstChild("Neck")
+                if neck and neck:IsA("Motor6D") then
+                    neck.Enabled = true
+                end
+            end
         end
     end
-    neckStates = {}
+    frozenHeads = {}
 end
 
 local function startAntiLag()
     if antiLagConnection then return end
-    
-    -- Удаляем линии сразу
-    removeLines()
-    -- Начинаем следить за новыми
-    watchNewLines()
-    
-    -- Замораживаем головы
-    freezeHeads()
-    
     antiLagConnection = RunService.Heartbeat:Connect(function()
-        if not antiLagActive then return
-        -- Периодически удаляем линии (на случай если что-то появилось)
-        removeLines()
-        freezeHeads()
+        if not antiLagActive then return end
+        
+        -- Удаляем линии захвата (Grab линии)
+        pcall(function()
+            local grabFolder = ReplicatedStorage:FindFirstChild("GrabEvents")
+            if grabFolder then
+                local create = grabFolder:FindFirstChild("CreateGrabLine")
+                local extend = grabFolder:FindFirstChild("ExtendGrabLine")
+                if create and create:IsA("RemoteEvent") then
+                    create:Destroy()
+                end
+                if extend and extend:IsA("RemoteEvent") then
+                    extend:Destroy()
+                end
+            end
+            -- Удаляем Beam и линии в Workspace
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                if v:IsA("Beam") or (v:IsA("BasePart") and v.Name:lower():find("line")) then
+                    v:Destroy()
+                end
+            end
+        end)
+        
+        -- Замораживаем головы всех игроков (кроме себя)
+        freezeAllHeads()
     end)
 end
 
@@ -794,12 +795,7 @@ local function stopAntiLag()
         antiLagConnection:Disconnect()
         antiLagConnection = nil
     end
-    if antiLagDescendantConn then
-        antiLagDescendantConn:Disconnect()
-        antiLagDescendantConn = nil
-    end
-    unfreezeHeads()
-    -- Линии не восстанавливаем, они появятся при новых грабах
+    unfreezeAllHeads()
 end
 
 -- ========================================
@@ -899,7 +895,7 @@ DefenseGroup:AddToggle("NotifierToggle", {
 })
 
 DefenseGroup:AddToggle("AntiLagToggle", {
-    Text = "ANTI-LAG (УБРАТЬ ЛИНИИ И ЗАМОРОЗИТЬ ГОЛОВЫ)",
+    Text = "ANTI-LAG (ЗАМОРОЗКА ГОЛОВ)",
     Default = false,
     Callback = function(value)
         antiLagActive = value
@@ -1023,9 +1019,8 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta (Anti-Lag исправлен)")
+print("  gakuka FTAP v0.1 beta (Anti-Lag добавлен)")
 print("  =================================")
-print("  Anti-Lag: удаляет линии у всех (кроме себя)")
-print("  и замораживает головы (отключает Neck)")
-print("  Головы не вращаются, но двигаются с телом")
+print("  Anti-Lag: удаляет линии и замораживает головы")
+print("  Все функции обновлены")
 print("====================================")
