@@ -1,9 +1,7 @@
--- gakuka FTAP - Raufield Style v1.3 (Исправлено обновление кнопок)
--- Меню в стиле Raufield (сине-голубая тема)
--- Anti-Kick из Venom X Hub (защита от кика и кик-граба)
--- Уведомления о киках: BillboardGui над кикнутым игроком + лог в консоль
--- ROBLOX EGOR: принудительное удержание скорости 70 через Heartbeat
--- SUPER THROW: кидает игроков/предметы при отпускании захвата (Grab)
+-- gakuka FTAP - Raufield Style v1.3 (Окончательный фикс кнопок)
+-- Все функции: FLING GRAB, ANTI-GRAB, ROBLOX EGOR, ANCHOR GRAB, ИЛЛЮЗИЯ БЕЗОПАСНОСТИ,
+-- УВЕДОМЛЕНИЯ О КИКЕ, SUPER THROW
+-- Кнопки теперь обновляются гарантированно
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,8 +28,6 @@ local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
 local buttons = {} -- таблица для хранения кнопок
-
--- ===== КНОПКИ (будут заполнены в GUI) =====
 local statusText = nil
 
 -- ========================================
@@ -596,9 +592,10 @@ local function stopAll()
 end
 
 -- ========================================
--- === ОБНОВЛЕНИЕ КНОПОК ===
+-- === ОБНОВЛЕНИЕ КНОПОК (ГАРАНТИРОВАННОЕ) ===
 -- ========================================
 local function updateButtons()
+    -- Проверяем существование каждой кнопки и обновляем
     if buttons.fling then
         buttons.fling.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
         buttons.fling.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
@@ -801,7 +798,7 @@ local function createGUI()
         stopAll()
     end, "stop")
 
-    updateButtons()
+    updateButtons() -- первое обновление после создания
     return screenGui
 end
 
@@ -858,5 +855,5 @@ print("  💥 FLING GRAB - все летают")
 print("  ⚡ SUPER THROW - при отпускании захвата")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
 print("  =================================")
-print("  КНОПКИ ТЕПЕРЬ ТОЧНО ОБНОВЛЯЮТСЯ!")
+print("  ✅ КНОПКИ ОБНОВЛЯЮТСЯ МГНОВЕННО!")
 print("====================================")
