@@ -1,8 +1,8 @@
 -- gakuka FTAP v0.1 beta
--- Меню в стиле Obsidian (без упоминания Ragalic)
--- Все функции: Anti-Grab, Anti-Kick, Third Person, ROBLOX EGOR, Super Throw, Anchor Grab, FLING GRAB, Jerk Off, уведомления о киках
+-- Меню в стиле Ragalic Mobile с кнопкой Toggle для сворачивания
+-- Anti-Kick по умолчанию ВЫКЛЮЧЕН
 
--- Загрузка библиотеки Obsidian (как в оригинальном скрипте)
+-- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -11,7 +11,7 @@ local Options = Library.Options
 local Toggles = Library.Toggles
 Library.ForceCheckbox = false
 
--- Создание окна
+-- Создание окна (меню)
 local Window = Library:CreateWindow({
     Title = "💀 gakuka FTAP",
     Footer = "v0.1 beta",
@@ -21,22 +21,24 @@ local Window = Library:CreateWindow({
 
 -- Вкладки
 local Tabs = {
-    Grab = Window:AddTab("Grab", "hand"),
     Defense = Window:AddTab("Defense", "shield"),
+    Target = Window:AddTab("Target", "crosshair"),
+    Grab = Window:AddTab("Grab", "hand"),
     Player = Window:AddTab("Player", "user"),
     Misc = Window:AddTab("Misc", "layers"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings")
 }
 
--- Группы
-local GrabGroup = Tabs.Grab:AddLeftGroupbox("Основные")
+-- Группы вкладок
 local DefenseGroup = Tabs.Defense:AddLeftGroupbox("Защита")
+local TargetGroup = Tabs.Target:AddLeftGroupbox("Цель")
+local GrabGroup = Tabs.Grab:AddLeftGroupbox("Основные")
 local PlayerGroup = Tabs.Player:AddLeftGroupbox("Движение")
 local MiscGroup = Tabs.Misc:AddLeftGroupbox("Общее")
 
--- ===============================
+-- ========================================
 -- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
--- ===============================
+-- ========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -58,16 +60,16 @@ local flingActive = false
 local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
-local antiKickActive = true
+local antiKickActive = false   -- <-- ПО УМОЛЧАНИЮ ВЫКЛЮЧЕН
 local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
 local thirdPersonActive = false
 local frozenObjects = {}
 
--- ===============================
+-- ========================================
 -- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
--- ===============================
+-- ========================================
 local function notify(title, content, duration)
     Library:Notify({
         Title = title or "Notification",
@@ -76,9 +78,9 @@ local function notify(title, content, duration)
     })
 end
 
--- ===============================
--- ANTI-GRAB (БЕЗ БЛОКИРОВКИ)
--- ===============================
+-- ========================================
+-- ANTI-GRAB
+-- ========================================
 local antiGrabConnection = nil
 
 local function startAntiGrab()
@@ -122,9 +124,9 @@ local function stopAntiGrab()
     end
 end
 
--- ===============================
--- ANTI-KICK (ШУРИКЕН ИЗ RAGALIC)
--- ===============================
+-- ========================================
+-- ANTI-KICK (ШУРИКЕН)
+-- ========================================
 local antiKickConnection = nil
 
 local function clearAntiKickShuriken()
@@ -194,9 +196,9 @@ local function stopAntiKick()
     clearAntiKickShuriken()
 end
 
--- ===============================
--- УВЕДОМЛЕНИЯ О КИКАХ (ИЗ RAGALIC)
--- ===============================
+-- ========================================
+-- УВЕДОМЛЕНИЯ О КИКАХ
+-- ========================================
 local kickNotifierConnection = nil
 local notifiedPlayers = {}
 
@@ -260,9 +262,9 @@ local function stopKickNotifier()
     notifiedPlayers = {}
 end
 
--- ===============================
--- ROBLOX EGOR (СКОРОСТЬ 70)
--- ===============================
+-- ========================================
+-- ROBLOX EGOR
+-- ========================================
 local speedLoop = nil
 
 local function setSpeed()
@@ -284,9 +286,9 @@ local function stopSpeedControl()
     if speedLoop then speedLoop:Disconnect(); speedLoop = nil end
 end
 
--- ===============================
+-- ========================================
 -- THIRD PERSON VIEW
--- ===============================
+-- ========================================
 local function enableThirdPerson()
     player.CameraMode = Enum.CameraMode.Classic
     Camera.CameraType = Enum.CameraType.Custom
@@ -308,9 +310,9 @@ local function toggleThirdPerson()
     if thirdPersonActive then enableThirdPerson() else disableThirdPerson() end
 end
 
--- ===============================
+-- ========================================
 -- SUPER THROW
--- ===============================
+-- ========================================
 local superThrowConnection = nil
 local superThrowStrength = 1200
 
@@ -347,9 +349,9 @@ local function stopSuperThrow()
     end
 end
 
--- ===============================
--- ANCHOR GRAB (ЗАМОРОЗКА)
--- ===============================
+-- ========================================
+-- ANCHOR GRAB
+-- ========================================
 local function freezeObject(object)
     if not object or not object:IsA("BasePart") then return end
     if frozenObjects[object] then return end
@@ -434,9 +436,9 @@ local function stopAnchorGrab()
     clearAllFrozen()
 end
 
--- ===============================
--- FLING GRAB (ФЛИНГ ВСЕХ)
--- ===============================
+-- ========================================
+-- FLING GRAB
+-- ========================================
 local flingConn = nil
 
 local function startFling()
@@ -473,9 +475,9 @@ local function stopFling()
     end
 end
 
--- ===============================
+-- ========================================
 -- JERK OFF
--- ===============================
+-- ========================================
 local jerkOffTrack = nil
 
 local function startJerkOff()
@@ -509,9 +511,9 @@ local function stopJerkOff()
     end
 end
 
--- ===============================
+-- ========================================
 -- ОСТАНОВКА ВСЕГО
--- ===============================
+-- ========================================
 local function stopAll()
     stopFling()
     stopAntiGrab()
@@ -526,7 +528,6 @@ local function stopAll()
     anchorGrabActive = false
     superThrowActive = false
     jerkOffActive = false
-    -- Обновим toggles в меню
     Library:Notify({
         Title = "⛔ Всё остановлено",
         Description = "Все функции отключены",
@@ -534,9 +535,64 @@ local function stopAll()
     })
 end
 
--- ===============================
--- ОБРАБОТЧИКИ КНОПОК (TOGGLES)
--- ===============================
+-- ========================================
+-- СОЗДАНИЕ КНОПКИ TOGGLE (СВОРАЧИВАНИЕ МЕНЮ)
+-- ========================================
+local function createToggleButton()
+    local toggleGui = Instance.new("ScreenGui")
+    toggleGui.Name = "gakukaToggle"
+    toggleGui.Parent = player:WaitForChild("PlayerGui")
+    toggleGui.ResetOnSpawn = false
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 60, 0, 60)
+    btn.Position = UDim2.new(0.02, 0, 0.85, 0) -- левый нижний угол
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+    btn.BackgroundTransparency = 0.2
+    btn.Text = "МЕНЮ"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.BorderSizePixel = 2
+    btn.BorderColor3 = Color3.fromRGB(80, 80, 180)
+    btn.Parent = toggleGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0) -- круглая кнопка
+    corner.Parent = btn
+
+    -- Находим основное окно библиотеки (создаётся в PlayerGui с именем ScreenGui)
+    local function getMainGui()
+        for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name == "gakukaGUI" then
+                return gui
+            end
+        end
+        return nil
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        local mainGui = getMainGui()
+        if mainGui then
+            mainGui.Enabled = not mainGui.Enabled
+            if mainGui.Enabled then
+                btn.Text = "МЕНЮ"
+                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+            else
+                btn.Text = "ВКЛ"
+                btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            end
+        end
+    end)
+
+    -- Изначально меню видимо, кнопка показывает "МЕНЮ"
+    btn.Text = "МЕНЮ"
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+end
+
+-- ========================================
+-- ДОБАВЛЯЕМ TOGGLES В МЕНЮ (с правильными состояниями)
+-- ========================================
 -- Grab Group
 GrabGroup:AddToggle("FlingGrabToggle", {
     Text = "💥 FLING GRAB",
@@ -577,7 +633,7 @@ DefenseGroup:AddToggle("AntiGrabToggle", {
 
 DefenseGroup:AddToggle("AntiKickToggle", {
     Text = "🔮 ANTI-KICK",
-    Default = true,
+    Default = false,  -- ВЫКЛЮЧЕН ПО УМОЛЧАНИЮ
     Callback = function(value)
         antiKickActive = value
         if value then startAntiKick() else stopAntiKick() end
@@ -590,6 +646,16 @@ DefenseGroup:AddToggle("NotifierToggle", {
     Callback = function(value)
         kickNotifierActive = value
         if value then startKickNotifier() else stopKickNotifier() end
+    end
+})
+
+-- Target Group (добавим кнопки для цели, хотя бы одну для примера)
+TargetGroup:AddToggle("TargetNotifyToggle", {
+    Text = "🎯 Уведомления о цели",
+    Default = false,
+    Callback = function(value)
+        -- здесь можно добавить функционал, если нужно
+        notify("Цель", "Функция в разработке", 2)
     end
 })
 
@@ -626,21 +692,23 @@ MiscGroup:AddButton({
     Text = "⛔ ОСТАНОВИТЬ ВСЁ",
     Func = function()
         stopAll()
-        -- Сбрасываем все toggles
+        -- Сбрасываем все toggles (кроме AntiKick, он должен остаться выключенным)
         Toggles.FlingGrabToggle:SetValue(false)
         Toggles.AnchorGrabToggle:SetValue(false)
         Toggles.SuperThrowToggle:SetValue(false)
         Toggles.AntiGrabToggle:SetValue(false)
-        -- AntiKick и Notifier не сбрасываем, так как они по умолчанию включены, но можно оставить как есть
+        -- AntiKick оставляем выключенным (если был включен, сбросим)
+        Toggles.AntiKickToggle:SetValue(false)
+        Toggles.NotifierToggle:SetValue(true)  -- уведомления оставляем включенными
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
         Toggles.JerkOffToggle:SetValue(false)
     end
 })
 
--- ===============================
+-- ========================================
 -- НАСТРОЙКИ UI
--- ===============================
+-- ========================================
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function()
     Library:Unload()
@@ -663,12 +731,14 @@ SaveManager:SetFolder("gakuka/Configs")
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
--- ===============================
+-- ========================================
 -- ИНИЦИАЛИЗАЦИЯ
--- ===============================
+-- ========================================
 setSpeed()
-startAntiKick()
+-- AntiKick НЕ запускаем, так как по умолчанию выключен
+-- startAntiKick() -- убрано
 startKickNotifier()
+createToggleButton()  -- создаём кнопку сворачивания
 
 -- Постоянный контроль
 local function tick()
@@ -700,7 +770,9 @@ end)
 print("====================================")
 print("  💀 gakuka FTAP v0.1 beta")
 print("  =================================")
-print("  ✅ Меню в стиле Obsidian")
+print("  ✅ Меню в стиле Ragalic Mobile")
+print("  ✅ Кнопка 'МЕНЮ' для сворачивания")
+print("  ✅ Anti-Kick по умолчанию ВЫКЛЮЧЕН")
 print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK, ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
 print("  ✅ Версия 0.1 beta")
 print("====================================")
