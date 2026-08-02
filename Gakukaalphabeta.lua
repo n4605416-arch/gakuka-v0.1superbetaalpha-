@@ -1,16 +1,35 @@
--- gakuka FTAP v0.1 beta (финальная версия)
--- Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK (сюрикен + кирка), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления, ANTI-LAG, Геймпасс Further Reach (переключатель)
+-- gakuka FTAP v0.1 beta (исправленная, с защитой от ошибок)
+-- Все функции стабильны
 
--- Загрузка библиотеки Obsidian
+-- Загрузка библиотеки Obsidian с проверкой
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Library, ThemeManager, SaveManager
+
+local function loadLibrary()
+    local success, result = pcall(function()
+        Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+        ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+        SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+    end)
+    if not success or not Library then
+        warn("[gakuka] Ошибка загрузки библиотеки Obsidian:", result)
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Ошибка",
+            Text = "Не удалось загрузить библиотеку. Проверьте интернет.",
+            Duration = 5,
+        })
+        return false
+    end
+    return true
+end
+
+if not loadLibrary() then return end
+
+Library.ForceCheckbox = false
 local Options = Library.Options
 local Toggles = Library.Toggles
-Library.ForceCheckbox = false
 
--- Создание окна с широкими уведомлениями
+-- Создание окна
 local Window = Library:CreateWindow({
     Title = "gakuka FTAP",
     Footer = "v0.1 beta",
@@ -68,18 +87,19 @@ local superThrowActive = false
 local jerkOffActive = false
 local thirdPersonActive = false
 local antiLagActive = false
-local gamepassActivated = false
 local frozenObjects = {}
 
--- ========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
--- ========================================
+-- Утилиты
 local function notify(title, content, duration)
-    Library:Notify({
-        Title = title or "Notification",
-        Description = content or "",
-        Time = duration or 5,
-    })
+    if Library then
+        Library:Notify({
+            Title = title or "Notification",
+            Description = content or "",
+            Time = duration or 5,
+        })
+    else
+        warn("[gakuka] Уведомление:", title, content)
+    end
 end
 
 -- ========================================
@@ -674,18 +694,13 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- ГЕЙМПАСС FURTHER REACH (ПЕРЕКЛЮЧАТЕЛЬ)
+-- ГЕЙМПАСС FURTHER REACH (КНОПКА)
 -- ========================================
 local function activateGamepass()
-    if gamepassActivated then
-        notify("Геймпасс", "Further Reach уже активирован!", 2)
-        return true
-    end
     local success, err = pcall(function()
         loadstring(game:HttpGet("https://gitlab.com/cooldawghaha/gitlabswitch/-/raw/main/FreeReach.lua"))()
     end)
     if success then
-        gamepassActivated = true
         notify("Геймпасс", "Further Reach активирован!", 3)
         return true
     else
@@ -912,25 +927,10 @@ MiscGroup:AddToggle("JerkOffToggle", {
     end
 })
 
-MiscGroup:AddToggle("GamepassToggle", {
+MiscGroup:AddButton({
     Text = "ГЕЙМПАСС FURTHER REACH",
-    Default = false,
-    Callback = function(value)
-        if value then
-            if activateGamepass() then
-                -- успешно, оставляем включенным
-            else
-                Toggles.GamepassToggle:SetValue(false)
-            end
-        else
-            -- при выключении уведомляем, что отключить нельзя
-            Library:Notify({
-                Title = "Геймпасс",
-                Description = "Further Reach нельзя отключить, он останется активным.",
-                Time = 3,
-            })
-            Toggles.GamepassToggle:SetValue(true)
-        end
+    Func = function()
+        activateGamepass()
     end
 })
 
@@ -949,7 +949,6 @@ MiscGroup:AddButton({
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
         Toggles.JerkOffToggle:SetValue(false)
-        -- Геймпасс не сбрасываем, он остаётся включённым
     end
 })
 
@@ -1015,8 +1014,8 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta (финальная)")
+print("  gakuka FTAP v0.1 beta (исправленная)")
 print("  =================================")
-print("  Геймпасс Further Reach – переключатель")
 print("  Все функции стабильны")
+print("  Геймпасс - кнопка (без переключателя)")
 print("====================================")
