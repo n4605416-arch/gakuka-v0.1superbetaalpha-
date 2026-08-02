@@ -1,5 +1,5 @@
--- gakuka FTAP v0.1 beta (исправленная, с защитой от ошибок)
--- Все функции стабильны
+-- gakuka FTAP v0.1 beta (исправленная, без геймпасса)
+-- Все функции стабильны, меню как было
 
 -- Загрузка библиотеки Obsidian с проверкой
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -694,24 +694,7 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- ГЕЙМПАСС FURTHER REACH (КНОПКА)
--- ========================================
-local function activateGamepass()
-    local success, err = pcall(function()
-        loadstring(game:HttpGet("https://gitlab.com/cooldawghaha/gitlabswitch/-/raw/main/FreeReach.lua"))()
-    end)
-    if success then
-        notify("Геймпасс", "Further Reach активирован!", 3)
-        return true
-    else
-        notify("Ошибка", "Не удалось активировать геймпасс. Проверьте консоль.", 4)
-        warn("[Геймпасс] Ошибка:", err)
-        return false
-    end
-end
-
--- ========================================
--- ANTI-LAG (ИСПРАВЛЕННЫЙ)
+-- ANTI-LAG
 -- ========================================
 local antiLagConnection = nil
 local antiLagDescendantConn = nil
@@ -930,7 +913,7 @@ MiscGroup:AddToggle("JerkOffToggle", {
 MiscGroup:AddButton({
     Text = "ГЕЙМПАСС FURTHER REACH",
     Func = function()
-        activateGamepass()
+        notify("Геймпасс", "Функция временно недоступна", 3)
     end
 })
 
@@ -1014,8 +997,8 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta (исправленная)")
+print("  gakuka FTAP v0.1 beta (стабильная)")
 print("  =================================")
-print("  Все функции стабильны")
-print("  Геймпасс - кнопка (без переключателя)")
+print("  Все функции работают")
+print("  Геймпасс заменён на заглушку")
 print("====================================")
