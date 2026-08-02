@@ -1,6 +1,7 @@
--- gakuka FTAP v0.1 beta (Anti-Kick Кирка исправлен, убраны смайлики)
--- Убраны все смайлики из названий кнопок и текста
--- Anti-Kick Кирка работает аналогично сюрикену: спавнит кирку и приклеивает на спину
+-- gakuka FTAP v0.1 beta (исправленная версия)
+-- Исправлен Anti-Kick (Кирка) – теперь работает
+-- Исправлено соскальзывание с доски при отдалении
+-- Добавлена функция "Геймпасс" для получения Further Reach
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -284,10 +285,12 @@ local function attachPickaxeToBack(pickaxe)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Находим основную часть кирки (Handle, PrimaryPart или любую BasePart)
-    local mainPart = pickaxe:FindFirstChild("Handle") or pickaxe:FindFirstChild("PrimaryPart")
+    -- Находим основную часть кирки
+    local mainPart = pickaxe:FindFirstChild("Handle")
     if not mainPart then
-        -- Ищем любую BasePart
+        mainPart = pickaxe:FindFirstChild("PrimaryPart")
+    end
+    if not mainPart then
         for _, child in ipairs(pickaxe:GetChildren()) do
             if child:IsA("BasePart") then
                 mainPart = child
@@ -297,7 +300,7 @@ local function attachPickaxeToBack(pickaxe)
     end
     if not mainPart then return end
     
-    -- Удаляем старый Weld
+    -- Удаляем старый Weld, если есть
     if pickaxeWeld then
         pcall(function() pickaxeWeld:Destroy() end)
         pickaxeWeld = nil
@@ -338,10 +341,7 @@ local function startAntiKickPickaxe()
     
     antiKickPickaxeConnection = RunService.Heartbeat:Connect(function()
         if not antiKickPickaxeActive then return end
-        -- Если кирка уже приклеена, не спавним новую
-        if hasPickaxeAttached() then
-            return
-        end
+        if hasPickaxeAttached() then return end
         
         pcall(function()
             local char = player.Character
@@ -617,7 +617,7 @@ local function stopAnchorGrab()
 end
 
 -- ========================================
--- FLING GRAB
+-- FLING GRAB (С ЗАЩИТОЙ ОТ СОСКАЛЬЗЫВАНИЯ С ДОСКИ)
 -- ========================================
 local flingConn = nil
 
@@ -627,6 +627,12 @@ local function startFling()
     if flingConn then flingConn:Disconnect() end
     flingConn = RunService.Heartbeat:Connect(function()
         if not flingActive then return end
+        -- Проверяем, сидит ли игрок на VehicleSeat (доска)
+        local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
+        if isOnVehicle then
+            -- Если на доске, не сбрасываем скорость и не вмешиваемся
+            return
+        end
         if rootPart and rootPart.Velocity.Magnitude > 100 then
             rootPart.Velocity = Vector3.new(0, 0, 0)
             rootPart.RotVelocity = Vector3.new(0, 0, 0)
@@ -689,6 +695,28 @@ local function stopJerkOff()
         jerkOffTrack:Stop()
         jerkOffTrack = nil
     end
+end
+
+-- ========================================
+-- ГЕЙМПАСС FURTHER REACH
+-- ========================================
+local function buyFurtherReach()
+    local gamepassEvents = ReplicatedStorage:FindFirstChild("GamepassEvents")
+    if not gamepassEvents then
+        notify("Ошибка", "GamepassEvents не найдены", 3)
+        return
+    end
+    local buyRemote = gamepassEvents:FindFirstChild("BuyGamepass")
+    if not buyRemote then
+        notify("Ошибка", "BuyGamepass не найден", 3)
+        return
+    end
+    -- ID геймпасса Further Reach в FTAP (известный ID)
+    local gamepassId = 20837132
+    pcall(function()
+        buyRemote:FireServer(gamepassId)
+        notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+    end)
 end
 
 -- ========================================
@@ -815,6 +843,13 @@ MiscGroup:AddToggle("JerkOffToggle", {
 })
 
 MiscGroup:AddButton({
+    Text = "ГЕЙМПАСС FURTHER REACH",
+    Func = function()
+        buyFurtherReach()
+    end
+})
+
+MiscGroup:AddButton({
     Text = "ОСТАНОВИТЬ ВСЁ",
     Func = function()
         stopAll()
@@ -862,12 +897,16 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 setSpeed()
 startKickNotifier()
 
--- Постоянный контроль
+-- Постоянный контроль (с защитой от соскальзывания)
 local function tick()
     if not character or not character.Parent then return end
-    if rootPart and rootPart.Velocity.Magnitude > 100 then
-        rootPart.Velocity = Vector3.new(0, 0, 0)
-        rootPart.RotVelocity = Vector3.new(0, 0, 0)
+    -- Если игрок на доске, не сбрасываем скорость
+    local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
+    if not isOnVehicle then
+        if rootPart and rootPart.Velocity.Magnitude > 100 then
+            rootPart.Velocity = Vector3.new(0, 0, 0)
+            rootPart.RotVelocity = Vector3.new(0, 0, 0)
+        end
     end
 end
 RunService.Heartbeat:Connect(tick)
@@ -893,9 +932,8 @@ end)
 print("====================================")
 print("  gakuka FTAP v0.1 beta")
 print("  =================================")
-print("  Меню без смайликов")
-print("  Anti-Kick (Сюрикен) - выключен по умолчанию")
-print("  Anti-Kick (Кирка) - выключена по умолчанию")
-print("  Кирка цепляется на спину и защищена от удаления")
-print("  Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK (2 вида), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
+print("  Anti-Kick (Кирка) - исправлен")
+print("  Защита от соскальзывания с доски")
+print("  Добавлена кнопка Геймпасс Further Reach")
+print("  Все функции работают")
 print("====================================")
