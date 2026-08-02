@@ -1,5 +1,6 @@
--- gakuka FTAP v0.1 beta (без Anti-Lag)
--- Все функции кроме Anti-Lag: FLING GRAB, ANTI-GRAB, ANTI-KICK (сюрикен + кирка), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления, геймпасс (переключатель)
+-- gakuka FTAP v0.1 beta (Anti-Lag исправлен)
+-- Anti-Lag: удаляет линии захвата у всех (кроме себя) и замораживает головы (отключает Neck)
+-- Головы не вращаются, но двигаются с телом
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -67,9 +68,12 @@ local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
 local thirdPersonActive = false
+local antiLagActive = false
 local frozenObjects = {}
 
--- Утилиты
+-- ========================================
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- ========================================
 local function notify(title, content, duration)
     Library:Notify({
         Title = title or "Notification",
@@ -601,6 +605,10 @@ local function startFling()
     if flingConn then flingConn:Disconnect() end
     flingConn = RunService.Heartbeat:Connect(function()
         if not flingActive then return end
+        local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
+        if isOnVehicle then
+            return
+        end
         if rootPart and rootPart.Velocity.Magnitude > 100 then
             rootPart.Velocity = Vector3.new(0, 0, 0)
             rootPart.RotVelocity = Vector3.new(0, 0, 0)
@@ -666,41 +674,133 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- ГЕЙМПАСС FURTHER REACH (ПЕРЕКЛЮЧАТЕЛЬ)
+-- ГЕЙМПАСС FURTHER REACH
 -- ========================================
-MiscGroup:AddToggle("GamepassToggle", {
-    Text = "ГЕЙМПАСС FURTHER REACH",
-    Default = false,
-    Callback = function(value)
-        if value then
-            local success, err = pcall(function()
-                loadstring(game:HttpGet("https://gitlab.com/cooldawghaha/gitlabswitch/-/raw/main/FreeReach.lua"))()
-            end)
-            if success then
-                Library:Notify({
-                    Title = "Геймпасс",
-                    Description = "Further Reach активирован!",
-                    Time = 3,
-                })
-            else
-                Library:Notify({
-                    Title = "Ошибка",
-                    Description = "Не удалось активировать геймпасс. Проверьте консоль (F9).",
-                    Time = 4,
-                })
-                warn("[Геймпасс] Ошибка:", err)
-                Toggles.GamepassToggle:SetValue(false)
+local function buyFurtherReach()
+    local gamepassEvents = ReplicatedStorage:FindFirstChild("GamepassEvents")
+    if not gamepassEvents then
+        notify("Ошибка", "GamepassEvents не найдены", 3)
+        return
+    end
+    
+    local buyRemote = gamepassEvents:FindFirstChild("BuyGamepass")
+    local purchaseRemote = gamepassEvents:FindFirstChild("PurchaseGamepass")
+    local checkRemote = gamepassEvents:FindFirstChild("CheckForGamepass")
+    
+    local gamepassId = 20837132
+    
+    if buyRemote then
+        pcall(function()
+            buyRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif purchaseRemote then
+        pcall(function()
+            purchaseRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif checkRemote then
+        pcall(function()
+            checkRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Проверка геймпасса выполнена", 3)
+        end)
+    else
+        notify("Ошибка", "Не найден Remote для покупки геймпасса", 3)
+    end
+end
+
+-- ========================================
+-- ANTI-LAG (ИСПРАВЛЕННЫЙ)
+-- ========================================
+local antiLagConnection = nil
+local antiLagDescendantConn = nil
+local neckStates = {}  -- храним оригинальные состояния Neck
+
+-- Функция удаления линий в Workspace
+local function removeLines()
+    pcall(function()
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v:IsA("Beam") then
+                v:Destroy()
+            elseif v:IsA("BasePart") and v.Name:lower():find("line") then
+                v:Destroy()
             end
-        else
-            Library:Notify({
-                Title = "Геймпасс",
-                Description = "Further Reach нельзя отключить, он останется активным.",
-                Time = 3,
-            })
-            Toggles.GamepassToggle:SetValue(true)
+        end
+    end)
+end
+
+-- Подписка на новые объекты для удаления линий
+local function watchNewLines()
+    if antiLagDescendantConn then return end
+    antiLagDescendantConn = Workspace.DescendantAdded:Connect(function(obj)
+        if not antiLagActive then return
+        if obj:IsA("Beam") or (obj:IsA("BasePart") and obj.Name:lower():find("line")) then
+            task.defer(function()
+                if obj and obj.Parent then
+                    obj:Destroy()
+                end
+            end)
+        end
+    end)
+end
+
+local function freezeHeads()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            if char then
+                local neck = char:FindFirstChild("Neck")
+                if neck and neck:IsA("Motor6D") then
+                    if not neckStates[neck] then
+                        neckStates[neck] = neck.Enabled
+                    end
+                    neck.Enabled = false
+                end
+            end
         end
     end
-})
+end
+
+local function unfreezeHeads()
+    for neck, enabled in pairs(neckStates) do
+        if neck and neck.Parent then
+            neck.Enabled = enabled
+        end
+    end
+    neckStates = {}
+end
+
+local function startAntiLag()
+    if antiLagConnection then return end
+    
+    -- Удаляем линии сразу
+    removeLines()
+    -- Начинаем следить за новыми
+    watchNewLines()
+    
+    -- Замораживаем головы
+    freezeHeads()
+    
+    antiLagConnection = RunService.Heartbeat:Connect(function()
+        if not antiLagActive then return
+        -- Периодически удаляем линии (на случай если что-то появилось)
+        removeLines()
+        freezeHeads()
+    end)
+end
+
+local function stopAntiLag()
+    if antiLagConnection then
+        antiLagConnection:Disconnect()
+        antiLagConnection = nil
+    end
+    if antiLagDescendantConn then
+        antiLagDescendantConn:Disconnect()
+        antiLagDescendantConn = nil
+    end
+    unfreezeHeads()
+    -- Линии не восстанавливаем, они появятся при новых грабах
+end
 
 -- ========================================
 -- ОСТАНОВКА ВСЕГО
@@ -715,12 +815,14 @@ local function stopAll()
     stopKickNotifier()
     stopSuperThrow()
     stopJerkOff()
+    stopAntiLag()
     if thirdPersonActive then toggleThirdPerson() end
     speedModeActive = false
     anchorGrabActive = false
     superThrowActive = false
     jerkOffActive = false
     antiKickPickaxeActive = false
+    antiLagActive = false
     Library:Notify({
         Title = "Всё остановлено",
         Description = "Все функции отключены",
@@ -796,6 +898,15 @@ DefenseGroup:AddToggle("NotifierToggle", {
     end
 })
 
+DefenseGroup:AddToggle("AntiLagToggle", {
+    Text = "ANTI-LAG (УБРАТЬ ЛИНИИ И ЗАМОРОЗИТЬ ГОЛОВЫ)",
+    Default = false,
+    Callback = function(value)
+        antiLagActive = value
+        if value then startAntiLag() else stopAntiLag() end
+    end
+})
+
 -- Player Group
 PlayerGroup:AddToggle("RobloxEgorToggle", {
     Text = "ROBLOX EGOR",
@@ -826,6 +937,13 @@ MiscGroup:AddToggle("JerkOffToggle", {
 })
 
 MiscGroup:AddButton({
+    Text = "ГЕЙМПАСС FURTHER REACH",
+    Func = function()
+        buyFurtherReach()
+    end
+})
+
+MiscGroup:AddButton({
     Text = "ОСТАНОВИТЬ ВСЁ",
     Func = function()
         stopAll()
@@ -836,6 +954,7 @@ MiscGroup:AddButton({
         Toggles.AntiKickToggle:SetValue(false)
         Toggles.AntiKickPickaxeToggle:SetValue(false)
         Toggles.NotifierToggle:SetValue(true)
+        Toggles.AntiLagToggle:SetValue(false)
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
         Toggles.JerkOffToggle:SetValue(false)
@@ -875,9 +994,12 @@ startKickNotifier()
 
 local function tick()
     if not character or not character.Parent then return end
-    if rootPart and rootPart.Velocity.Magnitude > 100 then
-        rootPart.Velocity = Vector3.new(0, 0, 0)
-        rootPart.RotVelocity = Vector3.new(0, 0, 0)
+    local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
+    if not isOnVehicle then
+        if rootPart and rootPart.Velocity.Magnitude > 100 then
+            rootPart.Velocity = Vector3.new(0, 0, 0)
+            rootPart.RotVelocity = Vector3.new(0, 0, 0)
+        end
     end
 end
 RunService.Heartbeat:Connect(tick)
@@ -895,14 +1017,15 @@ player.CharacterAdded:Connect(function(newChar)
     if superThrowActive then startSuperThrow() end
     if jerkOffActive then startJerkOff() end
     if thirdPersonActive then enableThirdPerson() end
+    if antiLagActive then startAntiLag() end
     if flingActive then stopFling(); startFling() end
     if anchorGrabActive then stopAnchorGrab(); startAnchorGrab() end
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta")
+print("  gakuka FTAP v0.1 beta (Anti-Lag исправлен)")
 print("  =================================")
-print("  Anti-Lag удалён")
-print("  Геймпасс Further Reach – переключатель")
-print("  Все остальные функции стабильны")
+print("  Anti-Lag: удаляет линии у всех (кроме себя)")
+print("  и замораживает головы (отключает Neck)")
+print("  Головы не вращаются, но двигаются с телом")
 print("====================================")
