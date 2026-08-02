@@ -1,9 +1,7 @@
--- gakuka FTAP v0.1 beta (исправленная версия)
--- Исправлен Anti-Kick (Кирка) – теперь работает
--- Исправлено соскальзывание с доски при отдалении
--- Добавлена функция "Геймпасс" для получения Further Reach
+-- gakuka FTAP v0.1 beta (с Anti-Lag)
+-- Добавлена функция Anti-Lag: удаляет линии захвата и замораживает головы всех игроков (кроме себя)
 
--- Загрузка библиотеки Obsidian
+-- Загрузка библиотеки Obsidian с широкими уведомлениями
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -12,12 +10,14 @@ local Options = Library.Options
 local Toggles = Library.Toggles
 Library.ForceCheckbox = false
 
--- Создание окна (меню)
+-- Создание окна
 local Window = Library:CreateWindow({
     Title = "gakuka FTAP",
     Footer = "v0.1 beta",
     NotifySide = "Right",
     ShowCustomCursor = true,
+    NotifyWidth = 350,
+    NotifyHeight = 80,
 })
 
 -- Вкладки
@@ -30,7 +30,7 @@ local Tabs = {
     ["UI Settings"] = Window:AddTab("UI Settings", "settings")
 }
 
--- Группы вкладок
+-- Группы
 local DefenseGroup = Tabs.Defense:AddLeftGroupbox("Защита")
 local TargetGroup = Tabs.Target:AddLeftGroupbox("Цель")
 local GrabGroup = Tabs.Grab:AddLeftGroupbox("Основные")
@@ -67,6 +67,7 @@ local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
 local thirdPersonActive = false
+local antiLagActive = false      -- <-- НОВОЕ СОСТОЯНИЕ
 local frozenObjects = {}
 
 -- ========================================
@@ -148,22 +149,11 @@ local function hasShurikenAttached()
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local firePart = hrp:FindFirstChild("FirePlayerPart")
-    if not firePart then return false end
-    for _, child in ipairs(firePart:GetChildren()) do
-        if child:IsA("Weld") or child:IsA("WeldConstraint") then
-            local otherPart = child.Part0 or child.Part1
-            if otherPart and otherPart.Parent and otherPart.Parent.Name == "AntiKick" then
-                return true
-            end
-        end
-    end
-    local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
-    if inv then
-        local shuriken = inv:FindFirstChild("AntiKick")
-        if shuriken and shuriken:FindFirstChild("StickyPart") then
-            local sp = shuriken.StickyPart
-            if sp:FindFirstChild("StickyWeld") and sp.StickyWeld.Part1 then
+    for _, weld in ipairs(hrp:GetDescendants()) do
+        if weld:IsA("Weld") or weld:IsA("WeldConstraint") then
+            local part0 = weld.Part0
+            local part1 = weld.Part1
+            if (part0 and part0.Parent and part0.Parent.Name == "AntiKick") or (part1 and part1.Parent and part1.Parent.Name == "AntiKick") then
                 return true
             end
         end
@@ -198,11 +188,8 @@ local function startAntiKick()
             if shuriken and shuriken:FindFirstChild("StickyPart") then
                 local stickyPart = shuriken.StickyPart
                 if stickyPart.CanTouch then
-                    local firePart = hrp:FindFirstChild("FirePlayerPart") or hrp:WaitForChild("FirePlayerPart", 5)
-                    if firePart then
-                        local stickyEvent = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("StickyPartEvent")
-                        stickyEvent:FireServer(stickyPart, firePart, CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(90), math.rad(90)))
-                    end
+                    local stickyEvent = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("StickyPartEvent")
+                    stickyEvent:FireServer(stickyPart, hrp, CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(90), math.rad(90)))
                     for _, obj in pairs(shuriken:GetChildren()) do
                         if obj:IsA("BasePart") then
                             obj.CanTouch = false
@@ -228,7 +215,7 @@ local function stopAntiKick()
 end
 
 -- ========================================
--- ANTI-KICK (КИРКА) - ИСПРАВЛЕННЫЙ
+-- ANTI-KICK (КИРКА)
 -- ========================================
 local antiKickPickaxeConnection = nil
 local pickaxeWeld = nil
@@ -254,7 +241,6 @@ local function hasPickaxeAttached()
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    -- Проверяем наличие Weld от кирки к HRP
     for _, weld in ipairs(hrp:GetChildren()) do
         if weld:IsA("Weld") and weld.Name == "PickaxeWeld" then
             local part0 = weld.Part0
@@ -263,7 +249,6 @@ local function hasPickaxeAttached()
             end
         end
     end
-    -- Проверяем папку игрушек на наличие приклеенной кирки
     local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
     if inv then
         local pickaxe = inv:FindFirstChild("AntiKickPickaxe")
@@ -285,7 +270,6 @@ local function attachPickaxeToBack(pickaxe)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Находим основную часть кирки
     local mainPart = pickaxe:FindFirstChild("Handle")
     if not mainPart then
         mainPart = pickaxe:FindFirstChild("PrimaryPart")
@@ -300,23 +284,19 @@ local function attachPickaxeToBack(pickaxe)
     end
     if not mainPart then return end
     
-    -- Удаляем старый Weld, если есть
     if pickaxeWeld then
         pcall(function() pickaxeWeld:Destroy() end)
         pickaxeWeld = nil
     end
     
-    -- Создаём новый Weld
     pickaxeWeld = Instance.new("Weld")
     pickaxeWeld.Name = "PickaxeWeld"
     pickaxeWeld.Part0 = hrp
     pickaxeWeld.Part1 = mainPart
-    -- Позиционируем на спине (смещение назад и вверх)
     pickaxeWeld.C0 = CFrame.new(0, 0, -1.5) * CFrame.Angles(math.rad(20), 0, 0)
     pickaxeWeld.Parent = hrp
     pickaxeWeld.Enabled = true
     
-    -- Устанавливаем NetworkOwner для защиты от взятия другими
     local setOwner = ReplicatedStorage:FindFirstChild("GrabEvents") and ReplicatedStorage.GrabEvents:FindFirstChild("SetNetworkOwner")
     if setOwner then
         pcall(function()
@@ -324,7 +304,6 @@ local function attachPickaxeToBack(pickaxe)
         end)
     end
     
-    -- Делаем части неколлизионными и невидимыми для касаний
     for _, obj in pairs(pickaxe:GetDescendants()) do
         if obj:IsA("BasePart") then
             obj.CanTouch = false
@@ -338,11 +317,9 @@ end
 
 local function startAntiKickPickaxe()
     if antiKickPickaxeConnection then return end
-    
     antiKickPickaxeConnection = RunService.Heartbeat:Connect(function()
         if not antiKickPickaxeActive then return end
         if hasPickaxeAttached() then return end
-        
         pcall(function()
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -617,7 +594,7 @@ local function stopAnchorGrab()
 end
 
 -- ========================================
--- FLING GRAB (С ЗАЩИТОЙ ОТ СОСКАЛЬЗЫВАНИЯ С ДОСКИ)
+-- FLING GRAB
 -- ========================================
 local flingConn = nil
 
@@ -627,10 +604,8 @@ local function startFling()
     if flingConn then flingConn:Disconnect() end
     flingConn = RunService.Heartbeat:Connect(function()
         if not flingActive then return end
-        -- Проверяем, сидит ли игрок на VehicleSeat (доска)
         local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
         if isOnVehicle then
-            -- Если на доске, не сбрасываем скорость и не вмешиваемся
             return
         end
         if rootPart and rootPart.Velocity.Magnitude > 100 then
@@ -706,17 +681,121 @@ local function buyFurtherReach()
         notify("Ошибка", "GamepassEvents не найдены", 3)
         return
     end
+    
     local buyRemote = gamepassEvents:FindFirstChild("BuyGamepass")
-    if not buyRemote then
-        notify("Ошибка", "BuyGamepass не найден", 3)
-        return
-    end
-    -- ID геймпасса Further Reach в FTAP (известный ID)
+    local purchaseRemote = gamepassEvents:FindFirstChild("PurchaseGamepass")
+    local checkRemote = gamepassEvents:FindFirstChild("CheckForGamepass")
+    
     local gamepassId = 20837132
-    pcall(function()
-        buyRemote:FireServer(gamepassId)
-        notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+    
+    if buyRemote then
+        pcall(function()
+            buyRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif purchaseRemote then
+        pcall(function()
+            purchaseRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
+        end)
+    elseif checkRemote then
+        pcall(function()
+            checkRemote:FireServer(gamepassId)
+            notify("Геймпасс", "Проверка геймпасса выполнена", 3)
+        end)
+    else
+        notify("Ошибка", "Не найден Remote для покупки геймпасса", 3)
+    end
+end
+
+-- ========================================
+-- ANTI-LAG (НОВАЯ ФУНКЦИЯ)
+-- ========================================
+local antiLagConnection = nil
+local frozenHeads = {}   -- для хранения оригинальных свойств голов
+
+local function freezeAllHeads()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            if char then
+                local head = char:FindFirstChild("Head")
+                if head and head:IsA("BasePart") then
+                    if not frozenHeads[head] then
+                        frozenHeads[head] = {
+                            Anchored = head.Anchored,
+                            CanCollide = head.CanCollide,
+                            CFrame = head.CFrame,
+                        }
+                    end
+                    head.Anchored = true
+                    head.CanCollide = true
+                    head.CFrame = frozenHeads[head].CFrame
+                    -- Также отключаем обновление поворота головы через Neck
+                    local neck = char:FindFirstChild("Neck")
+                    if neck and neck:IsA("Motor6D") then
+                        neck.Enabled = false
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function unfreezeAllHeads()
+    for head, data in pairs(frozenHeads) do
+        if head and head.Parent then
+            head.Anchored = data.Anchored or false
+            head.CanCollide = data.CanCollide or true
+            local char = head.Parent
+            if char then
+                local neck = char:FindFirstChild("Neck")
+                if neck and neck:IsA("Motor6D") then
+                    neck.Enabled = true
+                end
+            end
+        end
+    end
+    frozenHeads = {}
+end
+
+local function startAntiLag()
+    if antiLagConnection then return end
+    antiLagConnection = RunService.Heartbeat:Connect(function()
+        if not antiLagActive then return end
+        
+        -- Удаляем линии захвата (Grab линии)
+        pcall(function()
+            local grabFolder = ReplicatedStorage:FindFirstChild("GrabEvents")
+            if grabFolder then
+                local create = grabFolder:FindFirstChild("CreateGrabLine")
+                local extend = grabFolder:FindFirstChild("ExtendGrabLine")
+                if create and create:IsA("RemoteEvent") then
+                    create:Destroy()
+                end
+                if extend and extend:IsA("RemoteEvent") then
+                    extend:Destroy()
+                end
+            end
+            -- Удаляем Beam и линии в Workspace
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                if v:IsA("Beam") or (v:IsA("BasePart") and v.Name:lower():find("line")) then
+                    v:Destroy()
+                end
+            end
+        end)
+        
+        -- Замораживаем головы всех игроков (кроме себя)
+        freezeAllHeads()
     end)
+end
+
+local function stopAntiLag()
+    if antiLagConnection then
+        antiLagConnection:Disconnect()
+        antiLagConnection = nil
+    end
+    unfreezeAllHeads()
 end
 
 -- ========================================
@@ -732,12 +811,14 @@ local function stopAll()
     stopKickNotifier()
     stopSuperThrow()
     stopJerkOff()
+    stopAntiLag()
     if thirdPersonActive then toggleThirdPerson() end
     speedModeActive = false
     anchorGrabActive = false
     superThrowActive = false
     jerkOffActive = false
     antiKickPickaxeActive = false
+    antiLagActive = false
     Library:Notify({
         Title = "Всё остановлено",
         Description = "Все функции отключены",
@@ -746,7 +827,7 @@ local function stopAll()
 end
 
 -- ========================================
--- ДОБАВЛЯЕМ TOGGLES В МЕНЮ (БЕЗ СМАЙЛИКОВ)
+-- ДОБАВЛЯЕМ TOGGLES В МЕНЮ
 -- ========================================
 -- Grab Group
 GrabGroup:AddToggle("FlingGrabToggle", {
@@ -813,6 +894,15 @@ DefenseGroup:AddToggle("NotifierToggle", {
     end
 })
 
+DefenseGroup:AddToggle("AntiLagToggle", {
+    Text = "ANTI-LAG (ЗАМОРОЗКА ГОЛОВ)",
+    Default = false,
+    Callback = function(value)
+        antiLagActive = value
+        if value then startAntiLag() else stopAntiLag() end
+    end
+})
+
 -- Player Group
 PlayerGroup:AddToggle("RobloxEgorToggle", {
     Text = "ROBLOX EGOR",
@@ -860,6 +950,7 @@ MiscGroup:AddButton({
         Toggles.AntiKickToggle:SetValue(false)
         Toggles.AntiKickPickaxeToggle:SetValue(false)
         Toggles.NotifierToggle:SetValue(true)
+        Toggles.AntiLagToggle:SetValue(false)
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
         Toggles.JerkOffToggle:SetValue(false)
@@ -897,10 +988,8 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 setSpeed()
 startKickNotifier()
 
--- Постоянный контроль (с защитой от соскальзывания)
 local function tick()
     if not character or not character.Parent then return end
-    -- Если игрок на доске, не сбрасываем скорость
     local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
     if not isOnVehicle then
         if rootPart and rootPart.Velocity.Magnitude > 100 then
@@ -911,7 +1000,6 @@ local function tick()
 end
 RunService.Heartbeat:Connect(tick)
 
--- Обработка респавна
 player.CharacterAdded:Connect(function(newChar)
     character = newChar
     humanoid = character:WaitForChild("Humanoid")
@@ -925,15 +1013,14 @@ player.CharacterAdded:Connect(function(newChar)
     if superThrowActive then startSuperThrow() end
     if jerkOffActive then startJerkOff() end
     if thirdPersonActive then enableThirdPerson() end
+    if antiLagActive then startAntiLag() end
     if flingActive then stopFling(); startFling() end
     if anchorGrabActive then stopAnchorGrab(); startAnchorGrab() end
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta")
+print("  gakuka FTAP v0.1 beta (Anti-Lag добавлен)")
 print("  =================================")
-print("  Anti-Kick (Кирка) - исправлен")
-print("  Защита от соскальзывания с доски")
-print("  Добавлена кнопка Геймпасс Further Reach")
-print("  Все функции работают")
+print("  Anti-Lag: удаляет линии и замораживает головы")
+print("  Все функции обновлены")
 print("====================================")
