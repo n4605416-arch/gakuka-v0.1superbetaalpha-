@@ -1,13 +1,7 @@
--- gakuka FTAP - ULTIMATE FIXED (ВСЁ РАБОТАЕТ)
--- Anti-Grab: выключен, не блокирует движение
--- Anti-Kick: из Venom X Hub (защита от кика и кик-граба)
--- ROBLOX EGOR: скорость 70
--- Super Throw: бросок при отпускании
--- Anchor Grab: заморозка предметов
--- FLING GRAB: флинг всех игроков
--- Иллюзия безопасности: сюрикен в теле
--- Уведомления о киках: BillboardGui над кикнутым игроком
--- КНОПКИ МЕНЯЮТСЯ МГНОВЕННО
+-- gakuka FTAP - ULTIMATE v1.3 (СПАВН ТОЙ-СЮРИКЕНА)
+-- Все функции: Anti-Grab, ROBLOX EGOR (speed 70), Super Throw, Anchor Grab, FLING GRAB,
+-- Иллюзия безопасности (Anti-Kick + Anti-Kick Grab с той-сюрикеном), Уведомления о киках
+-- Кнопки работают, меню сворачивается, прыжок нормальный
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,9 +27,10 @@ local superThrowActive = false
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
+local collapsed = false
 
 -- ===== КНОПКИ =====
-local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, superBtn, stopBtn, statusText
+local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, notifierBtn, superBtn, stopBtn, statusText, toggleBtn
 
 -- ========================================
 -- === ФУНКЦИЯ ОБНОВЛЕНИЯ КНОПОК ===
@@ -126,79 +121,126 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН) ===
+-- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СПАВН ТОЙ-СЮРИКЕНА) ===
 -- ========================================
 local antiKickConnection = nil
 local shurikenObject = nil
+local kickGrabConnections = {}
 
-local function createShuriken()
-    local shuriken = Instance.new("Part")
-    shuriken.Size = Vector3.new(1.8, 0.2, 1.8)
-    shuriken.Shape = Enum.PartType.Block
-    shuriken.BrickColor = BrickColor.new("Bright blue")
-    shuriken.Material = Enum.Material.Neon
-    shuriken.Anchored = false
-    shuriken.CanCollide = false
-    shuriken.CanQuery = false
-    shuriken.Transparency = 0.15
-    shuriken.Name = "IllusionShuriken"
-    shuriken.Parent = workspace
-
-    local angles = {0, 90, 180, 270}
-    for _, angle in ipairs(angles) do
-        local blade = Instance.new("Part")
-        blade.Size = Vector3.new(0.8, 0.2, 2.0)
-        blade.Shape = Enum.PartType.Block
-        blade.BrickColor = BrickColor.new("Bright blue")
-        blade.Material = Enum.Material.Neon
-        blade.Anchored = false
-        blade.CanCollide = false
-        blade.CanQuery = false
-        blade.Transparency = 0.2
-        blade.Name = "Blade"
-        blade.Parent = shuriken
-        blade.CFrame = shuriken.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
+-- Функция для спавна Toy
+local function spawnToy(toyName, position)
+    -- Пытаемся найти игрушку в ReplicatedStorage (где обычно хранятся Toy'и)
+    local toy = ReplicatedStorage:FindFirstChild(toyName)
+    if not toy then
+        warn("[Иллюзия] Toy '" .. toyName .. "' не найдена. Создаём базовую.")
+        -- Если игрушки нет, создаём её из частей
+        toy = Instance.new("Model")
+        toy.Name = toyName
+        
+        local mainPart = Instance.new("Part")
+        mainPart.Size = Vector3.new(1.8, 0.2, 1.8)
+        mainPart.Shape = Enum.PartType.Block
+        mainPart.BrickColor = BrickColor.new("Bright blue")
+        mainPart.Material = Enum.Material.Neon
+        mainPart.Anchored = false
+        mainPart.CanCollide = true
+        mainPart.Parent = toy
+        
+        -- Добавляем лопасти, чтобы было похоже на сюрикен
+        for _, angle in ipairs({0, 90, 180, 270}) do
+            local blade = Instance.new("Part")
+            blade.Size = Vector3.new(0.8, 0.2, 2.0)
+            blade.Shape = Enum.PartType.Block
+            blade.BrickColor = BrickColor.new("Bright blue")
+            blade.Material = Enum.Material.Neon
+            blade.Anchored = false
+            blade.CanCollide = true
+            blade.Parent = toy
+            blade.CFrame = mainPart.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
+        end
+        
+        -- Делаем главную часть видимой
+        mainPart.Transparency = 0
     end
-
-    local glow = Instance.new("SelectionBox")
-    glow.Adornee = shuriken
-    glow.Color3 = Color3.fromRGB(0, 150, 255)
-    glow.Transparency = 0.3
-    glow.LineThickness = 0.15
-    glow.Name = "Glow"
-    glow.Parent = shuriken
-
-    local particles = Instance.new("ParticleEmitter")
-    particles.Texture = "rbxassetid://7575379200"
-    particles.Rate = 20
-    particles.VelocityInheritance = 0
-    particles.Lifetime = NumberRange.new(1, 1.5)
-    particles.SpreadAngle = Vector2.new(360, 360)
-    particles.Rotation = NumberRange.new(0, 360)
-    particles.Transparency = NumberSequence.new(0.8, 0)
-    particles.Color = ColorSequence.new(Color3.fromRGB(0, 150, 255))
-    particles.Size = NumberSequence.new(0.5, 1)
-    particles.Parent = shuriken
-
-    return shuriken
+    
+    -- Клонируем игрушку и помещаем в мир
+    local newToy = toy:Clone()
+    newToy.Parent = workspace
+    if position then
+        newToy:SetPrimaryPartCFrame(CFrame.new(position))
+    end
+    return newToy
 end
 
 local function startIllusion()
     if antiKickConnection then return end
+
+    -- Спавним сюрикен как Toy
     if not shurikenObject then
-        shurikenObject = createShuriken()
+        shurikenObject = spawnToy("Shuriken", rootPart.Position + Vector3.new(0, 2, 0))
+        print("[Иллюзия] Сюрикен-той спавнится в мире!")
     end
+
+    -- Основной цикл: телепортируем сюрикен в тело
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
         if not character or not character.Parent then return end
         if not rootPart then return end
-        if shurikenObject then
-            shurikenObject.CFrame = rootPart.CFrame * CFrame.new(0, 0.5, 0)
-            shurikenObject.Velocity = Vector3.new(0, 0, 0)
-            shurikenObject.RotVelocity = Vector3.new(0, 0, 0)
-            shurikenObject.CFrame = shurikenObject.CFrame * CFrame.Angles(0, tick() * 2, 0)
+
+        if shurikenObject and shurikenObject.Parent then
+            -- Перемещаем сюрикен в центр персонажа
+            shurikenObject:SetPrimaryPartCFrame(rootPart.CFrame * CFrame.new(0, 0.5, 0))
+        end
+
+        -- Удаляем объекты кика
+        pcall(function()
+            local kickScript = workspace:FindFirstChild("KickScript")
+            if kickScript then kickScript:Destroy() end
+
+            local charKick = character:FindFirstChild("KickScript")
+            if charKick then charKick:Destroy() end
+
+            local grabParts = workspace:FindFirstChild("GrabParts")
+            if grabParts then
+                local grabPart = grabParts:FindFirstChild("GrabPart")
+                if grabPart and grabPart:FindFirstChild("Kick") then
+                    grabPart:Destroy()
+                end
+            end
+
+            local kickEvent = ReplicatedStorage:FindFirstChild("KickEvent")
+            if kickEvent then kickEvent:Destroy() end
+        end)
+    end)
+
+    -- Защита от кик-граба (FirePlayerPart)
+    local connection
+    connection = Workspace.ChildAdded:Connect(function(child)
+        if not antiKickActive then return end
+        if child.Name == "GrabParts" then
+            task.wait(0.1)
+            local grabPart = child:FindFirstChild("GrabPart")
+            if grabPart then
+                local weld = grabPart:FindFirstChild("WeldConstraint")
+                if weld and weld.Part1 then
+                    local primaryPart = weld.Part1
+                    if primaryPart.Name == "FirePlayerPart" then
+                        for _, childPart in ipairs(primaryPart:GetChildren()) do
+                            if childPart:IsA("BodyPosition") or childPart:IsA("BodyGyro") then
+                                childPart:Destroy()
+                            end
+                        end
+                        while workspace:FindFirstChild("GrabParts") do
+                            task.wait()
+                        end
+                    end
+                end
+            end
         end
     end)
+    table.insert(kickGrabConnections, connection)
+
+    print("[Иллюзия] Защита включена (Той-сюрикен + антикик + антикик-граб)")
 end
 
 local function stopIllusion()
@@ -210,6 +252,11 @@ local function stopIllusion()
         shurikenObject:Destroy()
         shurikenObject = nil
     end
+    for _, conn in ipairs(kickGrabConnections) do
+        pcall(conn.Disconnect, conn)
+    end
+    kickGrabConnections = {}
+    print("[Иллюзия] Защита отключена")
 end
 
 -- ========================================
@@ -230,7 +277,7 @@ local function setSpeed()
         else
             if humanoid.WalkSpeed ~= 16 then humanoid.WalkSpeed = 16 end
         end
-        humanoid.JumpPower = 50
+        -- НЕ ТРОГАЕМ JUMPPOWER!
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
     end)
@@ -409,68 +456,6 @@ local function stopSuperThrow()
 end
 
 -- ========================================
--- === TOGGLE FUNCTIONS ===
--- ========================================
-local function toggleSpeed()
-    speedModeActive = not speedModeActive
-    setSpeed()
-    updateButtons()
-end
-
-local function toggleAntiGrab()
-    antiGrabActive = not antiGrabActive
-    if antiGrabActive then startAntiGrab() else stopAntiGrab() end
-    updateButtons()
-end
-
-local function toggleAnchorGrab()
-    anchorGrabActive = not anchorGrabActive
-    if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
-    updateButtons()
-end
-
-local function toggleIllusion()
-    antiKickActive = not antiKickActive
-    if antiKickActive then startIllusion() else stopIllusion() end
-    updateButtons()
-end
-
-local function toggleFling()
-    if flingActive then stopFling() else startFling() end
-    updateButtons()
-end
-
-local function toggleNotifier()
-    kickNotifierActive = not kickNotifierActive
-    if kickNotifierActive then startKickNotifier() else stopKickNotifier() end
-    updateButtons()
-end
-
-local function toggleSuperThrow()
-    superThrowActive = not superThrowActive
-    if superThrowActive then startSuperThrow() else stopSuperThrow() end
-    updateButtons()
-end
-
-local function stopAll()
-    stopFling()
-    stopAntiGrab()
-    stopSpeedControl()
-    stopIllusion()
-    stopAnchorGrab()
-    stopKickNotifier()
-    stopSuperThrow()
-    speedModeActive = false
-    anchorGrabActive = false
-    superThrowActive = false
-    updateButtons()
-    if statusText then
-        statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
-        statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
-    end
-end
-
--- ========================================
 -- === УВЕДОМЛЕНИЯ О КИКАХ ===
 -- ========================================
 local kickNotifierConnection = nil
@@ -547,72 +532,65 @@ local function stopKickNotifier()
 end
 
 -- ========================================
--- === ANTI-KICK ИЗ VENOM X HUB ===
+-- === TOGGLE FUNCTIONS ===
 -- ========================================
-local antiKickCoroutine = nil
-local kickGrabConnections = {}
-
-local function startAntiKickVenom()
-    if antiKickCoroutine then return end
-    antiKickCoroutine = coroutine.create(function()
-        while antiKickActive do
-            pcall(function()
-                local kickScript = workspace:FindFirstChild("KickScript")
-                if kickScript then kickScript:Destroy() end
-                local charKick = character:FindFirstChild("KickScript")
-                if charKick then charKick:Destroy() end
-                local grabParts = workspace:FindFirstChild("GrabParts")
-                if grabParts then
-                    local grabPart = grabParts:FindFirstChild("GrabPart")
-                    if grabPart and grabPart:FindFirstChild("Kick") then
-                        grabPart:Destroy()
-                    end
-                end
-                local kickEvent = ReplicatedStorage:FindFirstChild("KickEvent")
-                if kickEvent then kickEvent:Destroy() end
-            end)
-            task.wait()
-        end
-    end)
-    coroutine.resume(antiKickCoroutine)
-
-    local connection
-    connection = Workspace.ChildAdded:Connect(function(child)
-        if not antiKickActive then return end
-        if child.Name == "GrabParts" then
-            task.wait(0.1)
-            local grabPart = child:FindFirstChild("GrabPart")
-            if grabPart then
-                local weld = grabPart:FindFirstChild("WeldConstraint")
-                if weld and weld.Part1 then
-                    local primaryPart = weld.Part1
-                    if primaryPart.Name == "FirePlayerPart" then
-                        for _, childPart in ipairs(primaryPart:GetChildren()) do
-                            if childPart:IsA("BodyPosition") or childPart:IsA("BodyGyro") then
-                                childPart:Destroy()
-                            end
-                        end
-                        while workspace:FindFirstChild("GrabParts") do
-                            task.wait()
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    table.insert(kickGrabConnections, connection)
+local function toggleSpeed()
+    speedModeActive = not speedModeActive
+    setSpeed()
+    updateButtons()
 end
 
-local function stopAntiKickVenom()
-    antiKickActive = false
-    if antiKickCoroutine then
-        coroutine.close(antiKickCoroutine)
-        antiKickCoroutine = nil
+local function toggleAntiGrab()
+    antiGrabActive = not antiGrabActive
+    if antiGrabActive then startAntiGrab() else stopAntiGrab() end
+    updateButtons()
+end
+
+local function toggleAnchorGrab()
+    anchorGrabActive = not anchorGrabActive
+    if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
+    updateButtons()
+end
+
+local function toggleIllusion()
+    antiKickActive = not antiKickActive
+    if antiKickActive then startIllusion() else stopIllusion() end
+    updateButtons()
+end
+
+local function toggleFling()
+    if flingActive then stopFling() else startFling() end
+    updateButtons()
+end
+
+local function toggleNotifier()
+    kickNotifierActive = not kickNotifierActive
+    if kickNotifierActive then startKickNotifier() else stopKickNotifier() end
+    updateButtons()
+end
+
+local function toggleSuperThrow()
+    superThrowActive = not superThrowActive
+    if superThrowActive then startSuperThrow() else stopSuperThrow() end
+    updateButtons()
+end
+
+local function stopAll()
+    stopFling()
+    stopAntiGrab()
+    stopSpeedControl()
+    stopIllusion()
+    stopAnchorGrab()
+    stopKickNotifier()
+    stopSuperThrow()
+    speedModeActive = false
+    anchorGrabActive = false
+    superThrowActive = false
+    updateButtons()
+    if statusText then
+        statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
+        statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
-    for _, conn in ipairs(kickGrabConnections) do
-        pcall(conn.Disconnect, conn)
-    end
-    kickGrabConnections = {}
 end
 
 -- ========================================
@@ -653,7 +631,7 @@ local function createGUI()
     titleCorner.Parent = titleBar
 
     local titleText = Instance.new("TextLabel")
-    titleText.Size = UDim2.new(1, -60, 1, 0)
+    titleText.Size = UDim2.new(1, -100, 1, 0)
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = "💀 gakuka FTAP"
@@ -664,20 +642,63 @@ local function createGUI()
     titleText.Parent = titleBar
 
     local verText = Instance.new("TextLabel")
-    verText.Size = UDim2.new(1, -60, 0, 18)
+    verText.Size = UDim2.new(1, -100, 0, 18)
     verText.Position = UDim2.new(0, 15, 0, 28)
     verText.BackgroundTransparency = 1
-    verText.Text = "v1.3 ULTIMATE | КНОПКИ РАБОТАЮТ"
+    verText.Text = "v1.3 | ТОЙ-СЮРИКЕН | СВОРАЧИВАНИЕ"
     verText.TextColor3 = Color3.fromRGB(150, 200, 255)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
     verText.TextXAlignment = Enum.TextXAlignment.Left
     verText.Parent = titleBar
 
+    -- Кнопка сворачивания
+    toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 32, 0, 32)
+    toggleBtn.Position = UDim2.new(1, -72, 0, 9)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+    toggleBtn.BackgroundTransparency = 0.2
+    toggleBtn.Text = "−"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 22
+    toggleBtn.BorderSizePixel = 1
+    toggleBtn.BorderColor3 = Color3.fromRGB(0, 150, 200)
+    toggleBtn.Parent = titleBar
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 6)
+    toggleCorner.Parent = toggleBtn
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        collapsed = not collapsed
+        if collapsed then
+            mainFrame.Size = UDim2.new(0, 380, 0, 50)
+            toggleBtn.Text = "+"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+            titleText.Text = "💀 gakuka FTAP [СВЁРНУТО]"
+            titleText.TextColor3 = Color3.fromRGB(255, 200, 100)
+            for _, child in ipairs(mainFrame:GetChildren()) do
+                if child ~= titleBar and child ~= toggleBtn then
+                    child.Visible = false
+                end
+            end
+        else
+            mainFrame.Size = UDim2.new(0, 380, 0, 490)
+            toggleBtn.Text = "−"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+            titleText.Text = "💀 gakuka FTAP"
+            titleText.TextColor3 = Color3.fromRGB(0, 200, 255)
+            for _, child in ipairs(mainFrame:GetChildren()) do
+                child.Visible = true
+            end
+        end
+    end)
+
     -- Кнопка закрытия
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 32, 0, 32)
-    closeBtn.Position = UDim2.new(1, -40, 0, 9)
+    closeBtn.Position = UDim2.new(1, -38, 0, 9)
     closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     closeBtn.BackgroundTransparency = 0.2
     closeBtn.Text = "✕"
@@ -740,22 +761,29 @@ local function createGUI()
     local y = 0.19
 
     flingBtn = createBtn("💥 FLING GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        toggleFling()
+        if flingActive then stopFling() else startFling() end
+        updateButtons()
     end)
     y = y + 0.09
 
     antiBtn = createBtn("🛡️ ANTI-GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        toggleAntiGrab()
+        antiGrabActive = not antiGrabActive
+        if antiGrabActive then startAntiGrab() else stopAntiGrab() end
+        updateButtons()
     end)
     y = y + 0.09
 
     speedBtn = createBtn("🏃 ROBLOX EGOR [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        toggleSpeed()
+        speedModeActive = not speedModeActive
+        setSpeed()
+        updateButtons()
     end)
     y = y + 0.09
 
     anchorBtn = createBtn("⚓ ANCHOR GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
-        toggleAnchorGrab()
+        anchorGrabActive = not anchorGrabActive
+        if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
+        updateButtons()
     end)
     y = y + 0.09
 
@@ -797,8 +825,7 @@ end
 -- === ИНИЦИАЛИЗАЦИЯ ===
 -- ========================================
 setSpeed()
-startIllusion()
-startAntiKickVenom()
+startIllusion()       -- <-- теперь одна функция включает всю защиту с той-сюрикеном
 startKickNotifier()
 createGUI()
 
@@ -811,7 +838,7 @@ player.CharacterAdded:Connect(function(newChar)
     wait(0.5)
     setSpeed()
     if antiGrabActive then startAntiGrab() end
-    if antiKickActive then startAntiKickVenom() end
+    if antiKickActive then startIllusion() end
     if kickNotifierActive then startKickNotifier() end
     if superThrowActive then startSuperThrow() end
     if flingActive then
@@ -825,16 +852,16 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP - ULTIMATE")
+print("  💀 gakuka FTAP - ULTIMATE v1.3")
 print("  =================================")
 print("  🛡️ ANTI-GRAB - ВЫКЛЮЧЕН")
-print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ")
+print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ (ТОЙ-СЮРИКЕН + антикик + антикик-граб)")
 print("  🔔 УВЕДОМЛЕНИЯ О КИКЕ - ВКЛ")
 print("  ✅ ROBLOX EGOR - скорость 70")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
 print("  💥 FLING GRAB - все летают")
 print("  ⚡ SUPER THROW - при отпускании")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
-print("  =================================")
-print("  ✅ КНОПКИ РАБОТАЮТ 100%")
+print("  ✅ ПРЫЖОК НОРМАЛЬНЫЙ")
+print("  ✅ СВОРАЧИВАНИЕ - кнопки скрываются")
 print("====================================")
