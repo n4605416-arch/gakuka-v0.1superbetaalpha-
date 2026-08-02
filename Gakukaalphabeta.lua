@@ -1,8 +1,8 @@
--- gakuka FTAP - RAGALIC STYLE v3.1 (ИСПРАВЛЕННЫЙ)
--- Меню с вкладками: Grab, Defense, Player, Misc
+-- gakuka FTAP - RAGALIC STYLE v3.2 (GUI ПОЛНОСТЬЮ ПЕРЕПИСАН)
+-- Вкладки: Grab, Defense, Player, Misc
 -- Anti-Kick из Ragalic (спавн сюрикена)
 -- Third Person View
--- Все функции работают, кнопки обновляются
+-- Все функции работают, кнопки обновляются, меню корректно переключается
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -34,8 +34,9 @@ local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
 local currentTab = "Grab"
-local buttons = {}  -- таблица для кнопок текущей вкладки
+local buttons = {}
 local statusText = nil
+local contentFrame = nil
 
 -- ========================================
 -- === ФУНКЦИЯ ОБНОВЛЕНИЯ КНОПОК ===
@@ -86,7 +87,7 @@ local function updateButtons()
 end
 
 -- ========================================
--- === ANTI-GRAB (БЕЗ БЛОКИРОВКИ) ===
+-- === ANTI-GRAB ===
 -- ========================================
 local antiGrabConnection = nil
 
@@ -132,21 +133,17 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ANTI-KICK ИЗ RAGALIC (ShurikenAntiKick) ===
+-- === ANTI-KICK ИЗ RAGALIC ===
 -- ========================================
 local antiKickConnection = nil
-local antiKickShuriken = nil
 
 local function clearAntiKickShuriken()
-    local plr = player
-    local inv = workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+    local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
     local destroyrem = ReplicatedStorage:FindFirstChild("MenuToys") and ReplicatedStorage.MenuToys:FindFirstChild("DestroyToy")
     if inv and destroyrem then
         for _, v in pairs(inv:GetChildren()) do
             if v.Name == "AntiKick" or v.Name == "NinjaShuriken" then
-                pcall(function()
-                    destroyrem:FireServer(v)
-                end)
+                pcall(function() destroyrem:FireServer(v) end)
             end
         end
     end
@@ -157,14 +154,13 @@ local function startAntiKick()
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
         pcall(function()
-            local plr = player
-            local char = plr.Character
+            local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then return end
             local hrp = char.HumanoidRootPart
-            local canSpawn = plr:FindFirstChild("CanSpawnToy")
+            local canSpawn = player:FindFirstChild("CanSpawnToy")
             if not canSpawn or not canSpawn.Value then return end
-            
-            local inv = workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+
+            local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
             local shuriken = inv and inv:FindFirstChild("NinjaShuriken")
             if not shuriken then
                 local spawnRemote = ReplicatedStorage.MenuToys.SpawnToyRemoteFunction
@@ -172,11 +168,9 @@ local function startAntiKick()
                     spawnRemote:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 12, 20), Vector3.new())
                 end)
                 task.wait(0.2)
-                inv = workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+                inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
                 shuriken = inv and inv:FindFirstChild("NinjaShuriken")
-                if shuriken then
-                    shuriken.Name = "AntiKick"
-                end
+                if shuriken then shuriken.Name = "AntiKick" end
             end
             if shuriken and shuriken:FindFirstChild("StickyPart") then
                 local stickyPart = shuriken.StickyPart
@@ -400,7 +394,7 @@ local function stopFling()
 end
 
 -- ========================================
--- === УВЕДОМЛЕНИЯ О КИКАХ (из Ragalic) ===
+-- === УВЕДОМЛЕНИЯ О КИКАХ ===
 -- ========================================
 local kickNotifierConnection = nil
 local notifiedPlayers = {}
@@ -414,7 +408,7 @@ local function playKickSound()
     s:Destroy()
 end
 
-local function notifyKick(displayName, username)
+local function notifyKick(displayName)
     if statusText then
         statusText.Text = "⚠️ " .. displayName .. " был кикнут!"
         statusText.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -443,25 +437,17 @@ end
 
 local function startKickNotifier()
     if kickNotifierConnection then return end
-    notifiedPlayers = {}
-
     kickNotifierConnection = Workspace.ChildAdded:Connect(function(obj)
         if not kickNotifierActive then return end
         if obj.Name == "BlackHoleKick" or obj.Name == "BlackHoleDetected" then
             task.wait(0.05)
-            local pos
-            if obj:IsA("BasePart") then
-                pos = obj.Position
-            elseif obj:IsA("Model") and obj.PrimaryPart then
-                pos = obj.PrimaryPart.Position
-            end
+            local pos = obj:IsA("BasePart") and obj.Position or (obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position)
             if not pos then return end
-            
             local plr = getClosestPlayer(pos)
-            if not plr then return end
-            
-            playKickSound()
-            notifyKick(plr.DisplayName, plr.Name)
+            if plr then
+                playKickSound()
+                notifyKick(plr.DisplayName)
+            end
         end
     end)
 end
@@ -483,20 +469,16 @@ local function startJerkOff()
     if not character or not character.Parent then return end
     local hum = character:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-    
     local animator = hum:FindFirstChildOfClass("Animator")
     if not animator then
         animator = Instance.new("Animator")
         animator.Parent = hum
     end
-    
     local anim = Instance.new("Animation")
     anim.AnimationId = "rbxassetid://168268306"
-    
     jerkOffTrack = animator:LoadAnimation(anim)
     jerkOffTrack.Priority = Enum.AnimationPriority.Action
     jerkOffTrack:Play()
-    
     task.spawn(function()
         while jerkOffActive do
             task.wait(0.1)
@@ -515,7 +497,7 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- === THIRD PERSON VIEW (из Ragalic) ===
+-- === THIRD PERSON VIEW ===
 -- ========================================
 local function enableThirdPerson()
     player.CameraMode = Enum.CameraMode.Classic
@@ -535,87 +517,32 @@ end
 
 local function toggleThirdPerson()
     thirdPersonActive = not thirdPersonActive
-    if thirdPersonActive then
-        enableThirdPerson()
-    else
-        disableThirdPerson()
-    end
+    if thirdPersonActive then enableThirdPerson() else disableThirdPerson() end
     updateButtons()
 end
 
 -- ========================================
 -- === TOGGLE FUNCTIONS ===
 -- ========================================
-local function toggleSpeed()
-    speedModeActive = not speedModeActive
-    setSpeed()
-    updateButtons()
-end
-
-local function toggleAntiGrab()
-    antiGrabActive = not antiGrabActive
-    if antiGrabActive then startAntiGrab() else stopAntiGrab() end
-    updateButtons()
-end
-
-local function toggleAnchorGrab()
-    anchorGrabActive = not anchorGrabActive
-    if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
-    updateButtons()
-end
-
-local function toggleAntiKick()
-    antiKickActive = not antiKickActive
-    if antiKickActive then startAntiKick() else stopAntiKick() end
-    updateButtons()
-end
-
-local function toggleFling()
-    if flingActive then stopFling() else startFling() end
-    updateButtons()
-end
-
-local function toggleNotifier()
-    kickNotifierActive = not kickNotifierActive
-    if kickNotifierActive then startKickNotifier() else stopKickNotifier() end
-    updateButtons()
-end
-
-local function toggleSuperThrow()
-    superThrowActive = not superThrowActive
-    if superThrowActive then startSuperThrow() else stopSuperThrow() end
-    updateButtons()
-end
-
-local function toggleJerkOff()
-    jerkOffActive = not jerkOffActive
-    if jerkOffActive then startJerkOff() else stopJerkOff() end
-    updateButtons()
-end
+local function toggleSpeed() speedModeActive = not speedModeActive; setSpeed(); updateButtons() end
+local function toggleAntiGrab() antiGrabActive = not antiGrabActive; if antiGrabActive then startAntiGrab() else stopAntiGrab() end; updateButtons() end
+local function toggleAnchorGrab() anchorGrabActive = not anchorGrabActive; if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end; updateButtons() end
+local function toggleAntiKick() antiKickActive = not antiKickActive; if antiKickActive then startAntiKick() else stopAntiKick() end; updateButtons() end
+local function toggleFling() if flingActive then stopFling() else startFling() end; updateButtons() end
+local function toggleNotifier() kickNotifierActive = not kickNotifierActive; if kickNotifierActive then startKickNotifier() else stopKickNotifier() end; updateButtons() end
+local function toggleSuperThrow() superThrowActive = not superThrowActive; if superThrowActive then startSuperThrow() else stopSuperThrow() end; updateButtons() end
+local function toggleJerkOff() jerkOffActive = not jerkOffActive; if jerkOffActive then startJerkOff() else stopJerkOff() end; updateButtons() end
 
 local function stopAll()
-    stopFling()
-    stopAntiGrab()
-    stopSpeedControl()
-    stopAntiKick()
-    stopAnchorGrab()
-    stopKickNotifier()
-    stopSuperThrow()
-    stopJerkOff()
+    stopFling(); stopAntiGrab(); stopSpeedControl(); stopAntiKick(); stopAnchorGrab(); stopKickNotifier(); stopSuperThrow(); stopJerkOff()
     if thirdPersonActive then toggleThirdPerson() end
-    speedModeActive = false
-    anchorGrabActive = false
-    superThrowActive = false
-    jerkOffActive = false
+    speedModeActive = false; anchorGrabActive = false; superThrowActive = false; jerkOffActive = false
     updateButtons()
-    if statusText then
-        statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
-        statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
-    end
+    if statusText then statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"; statusText.TextColor3 = Color3.fromRGB(255, 100, 100) end
 end
 
 -- ========================================
--- === GUI (СТИЛЬ RAGALIC) ===
+-- === GUI (ПОЛНОСТЬЮ ПЕРЕПИСАН) ===
 -- ========================================
 local function createGUI()
     if screenGui then screenGui:Destroy() end
@@ -667,7 +594,7 @@ local function createGUI()
     verText.Size = UDim2.new(1, -80, 0, 16)
     verText.Position = UDim2.new(0, 12, 0, 26)
     verText.BackgroundTransparency = 1
-    verText.Text = "v3.1 | Ragalic Style | Anti-Kick"
+    verText.Text = "v3.2 | Ragalic Style | Anti-Kick"
     verText.TextColor3 = Color3.fromRGB(255, 200, 100)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
@@ -691,11 +618,7 @@ local function createGUI()
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 6)
     closeCorner.Parent = closeBtn
-
-    closeBtn.MouseButton1Click:Connect(function()
-        stopAll()
-        if screenGui then screenGui:Destroy(); screenGui = nil end
-    end)
+    closeBtn.MouseButton1Click:Connect(function() stopAll(); if screenGui then screenGui:Destroy(); screenGui = nil end end)
 
     -- Статус
     statusText = Instance.new("TextLabel")
@@ -717,16 +640,10 @@ local function createGUI()
     -- Вкладки
     local tabNames = {"Grab", "Defense", "Player", "Misc"}
     local tabButtons = {}
-    local contentFrame = Instance.new("Frame")
-    contentFrame.Size = UDim2.new(1, 0, 1, -85)
-    contentFrame.Position = UDim2.new(0, 0, 0, 85)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-
-    local function createTab(name, y)
+    local function createTab(name, i)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0.23, 0, 0, 28)
-        btn.Position = UDim2.new(0.02 + (y-1)*0.24, 0, 0.16, 0)
+        btn.Position = UDim2.new(0.02 + (i-1)*0.24, 0, 0.16, 0)
         btn.BackgroundColor3 = (name == currentTab) and Color3.fromRGB(80, 80, 180) or Color3.fromRGB(40, 40, 60)
         btn.BackgroundTransparency = 0.2
         btn.Text = name
@@ -747,24 +664,26 @@ local function createGUI()
             end
             updateTabContent(name)
         end)
-        table.insert(tabButtons, btn)
+        tabButtons[name] = btn
         return btn
     end
 
-    for i, name in ipairs(tabNames) do
-        createTab(name, i)
-    end
+    for i, name in ipairs(tabNames) do createTab(name, i) end
 
-    -- Функция обновления контента вкладки
+    -- Контент
+    contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, 0, 1, -85)
+    contentFrame.Position = UDim2.new(0, 0, 0, 85)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Parent = mainFrame
+
     local function updateTabContent(tab)
-        -- Очищаем контейнер и сбрасываем таблицу кнопок
         contentFrame:ClearAllChildren()
-        buttons = {}  -- очищаем старые ссылки
+        buttons = {}
 
-        local function createGroupBox(title, yPos)
+        local function createGroupBox(title)
             local frame = Instance.new("Frame")
             frame.Size = UDim2.new(0.46, 0, 0, 120)
-            frame.Position = UDim2.new(0.02, 0, yPos, 0)
             frame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
             frame.BackgroundTransparency = 0.3
             frame.BorderSizePixel = 1
@@ -785,13 +704,26 @@ local function createGUI()
             label.TextXAlignment = Enum.TextXAlignment.Left
             label.Parent = frame
 
-            return frame, label
+            local container = Instance.new("Frame")
+            container.Size = UDim2.new(1, 0, 1, -25)
+            container.Position = UDim2.new(0, 0, 0, 25)
+            container.BackgroundTransparency = 1
+            container.Parent = frame
+
+            local layout = Instance.new("UIListLayout")
+            layout.FillDirection = Enum.FillDirection.Vertical
+            layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            layout.VerticalAlignment = Enum.VerticalAlignment.Top
+            layout.SortOrder = Enum.SortOrder.LayoutOrder
+            layout.Padding = UDim.new(0, 4)
+            layout.Parent = container
+
+            return container
         end
 
-        local function addButton(group, text, callback, key)
+        local function addButton(container, text, callback, key)
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(0.9, 0, 0, 26)
-            btn.Position = UDim2.new(0.05, 0, 0.25 + (#group:GetChildren() - 1) * 0.2, 0)
             btn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
             btn.BackgroundTransparency = 0.3
             btn.Text = text
@@ -800,7 +732,7 @@ local function createGUI()
             btn.TextSize = 13
             btn.BorderSizePixel = 1
             btn.BorderColor3 = Color3.fromRGB(80, 80, 150)
-            btn.Parent = group
+            btn.Parent = container
             local c = Instance.new("UICorner")
             c.CornerRadius = UDim.new(0, 6)
             c.Parent = btn
@@ -810,27 +742,27 @@ local function createGUI()
             return btn
         end
 
+        -- Заполняем вкладки
         if tab == "Grab" then
-            local group1, _ = createGroupBox("Основные", 0.02)
-            addButton(group1, "💥 FLING GRAB [ВЫКЛ]", function() toggleFling() end, "fling")
-            addButton(group1, "⚓ ANCHOR GRAB [ВЫКЛ]", function() toggleAnchorGrab() end, "anchor")
-            addButton(group1, "⚡ SUPER THROW [ВЫКЛ]", function() toggleSuperThrow() end, "super")
+            local g1 = createGroupBox("Основные")
+            addButton(g1, "💥 FLING GRAB [ВЫКЛ]", function() toggleFling() end, "fling")
+            addButton(g1, "⚓ ANCHOR GRAB [ВЫКЛ]", function() toggleAnchorGrab() end, "anchor")
+            addButton(g1, "⚡ SUPER THROW [ВЫКЛ]", function() toggleSuperThrow() end, "super")
         elseif tab == "Defense" then
-            local group1, _ = createGroupBox("Защита", 0.02)
-            addButton(group1, "🛡️ ANTI-GRAB [ВЫКЛ]", function() toggleAntiGrab() end, "antiGrab")
-            addButton(group1, "🔮 ANTI-KICK [ВКЛ]", function() toggleAntiKick() end, "antiKick")
-            addButton(group1, "🔔 УВЕДОМЛЕНИЯ [ВКЛ]", function() toggleNotifier() end, "notifier")
+            local g1 = createGroupBox("Защита")
+            addButton(g1, "🛡️ ANTI-GRAB [ВЫКЛ]", function() toggleAntiGrab() end, "antiGrab")
+            addButton(g1, "🔮 ANTI-KICK [ВКЛ]", function() toggleAntiKick() end, "antiKick")
+            addButton(g1, "🔔 УВЕДОМЛЕНИЯ [ВКЛ]", function() toggleNotifier() end, "notifier")
         elseif tab == "Player" then
-            local group1, _ = createGroupBox("Движение", 0.02)
-            addButton(group1, "🏃 ROBLOX EGOR [ВЫКЛ]", function() toggleSpeed() end, "speed")
-            addButton(group1, "👁️ 3RD PERSON [ВЫКЛ]", function() toggleThirdPerson() end, "thirdPerson")
+            local g1 = createGroupBox("Движение")
+            addButton(g1, "🏃 ROBLOX EGOR [ВЫКЛ]", function() toggleSpeed() end, "speed")
+            addButton(g1, "👁️ 3RD PERSON [ВЫКЛ]", function() toggleThirdPerson() end, "thirdPerson")
         elseif tab == "Misc" then
-            local group1, _ = createGroupBox("Общее", 0.02)
-            addButton(group1, "🔞 JERK OFF [ВЫКЛ]", function() toggleJerkOff() end, "jerk")
-            addButton(group1, "⛔ ОСТАНОВИТЬ ВСЁ", function() stopAll() end, "stop")
+            local g1 = createGroupBox("Общее")
+            addButton(g1, "🔞 JERK OFF [ВЫКЛ]", function() toggleJerkOff() end, "jerk")
+            addButton(g1, "⛔ ОСТАНОВИТЬ ВСЁ", function() stopAll() end, "stop")
         end
 
-        -- Принудительно обновляем все кнопки
         updateButtons()
     end
 
@@ -871,22 +803,16 @@ player.CharacterAdded:Connect(function(newChar)
     if superThrowActive then startSuperThrow() end
     if jerkOffActive then startJerkOff() end
     if thirdPersonActive then enableThirdPerson() end
-    if flingActive then
-        stopFling()
-        startFling()
-    end
-    if anchorGrabActive then
-        stopAnchorGrab()
-        startAnchorGrab()
-    end
+    if flingActive then stopFling(); startFling() end
+    if anchorGrabActive then stopAnchorGrab(); startAnchorGrab() end
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP - RAGALIC STYLE v3.1")
+print("  💀 gakuka FTAP - RAGALIC STYLE v3.2")
 print("  =================================")
+print("  ✅ Меню с вкладками (Grab, Defense, Player, Misc)")
 print("  ✅ Anti-Kick из Ragalic (сюрикен)")
 print("  ✅ Third Person View")
-print("  ✅ Меню с вкладками (Grab, Defense, Player, Misc)")
 print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
-print("  ✅ КНОПКИ МЕНЯЮТСЯ ПРИ ПЕРЕКЛЮЧЕНИИ ВКЛАДОК")
+print("  ✅ КНОПКИ ОБНОВЛЯЮТСЯ ПРИ ПЕРЕКЛЮЧЕНИИ ВКЛАДОК")
 print("====================================")
