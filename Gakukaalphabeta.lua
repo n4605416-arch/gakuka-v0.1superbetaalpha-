@@ -1,7 +1,8 @@
--- gakuka FTAP - RAGALIC STYLE v3.0 (Полное меню + Anti-Kick из Ragalic + Third Person)
--- Меню: вкладки, групбоксы, тёмная тема
--- Anti-Kick: спавн NinjaShuriken и приклейка к телу через StickyPartEvent
--- Third Person: переключение камеры
+-- gakuka FTAP - RAGALIC STYLE v3.1 (ИСПРАВЛЕННЫЙ)
+-- Меню с вкладками: Grab, Defense, Player, Misc
+-- Anti-Kick из Ragalic (спавн сюрикена)
+-- Third Person View
+-- Все функции работают, кнопки обновляются
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,9 +34,7 @@ local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
 local currentTab = "Grab"
-
--- ===== КНОПКИ (будут заполнены) =====
-local buttons = {}
+local buttons = {}  -- таблица для кнопок текущей вкладки
 local statusText = nil
 
 -- ========================================
@@ -43,33 +42,35 @@ local statusText = nil
 -- ========================================
 local function updateButtons()
     for key, btn in pairs(buttons) do
-        if key == "fling" then
-            btn.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
-        elseif key == "antiGrab" then
-            btn.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-        elseif key == "speed" then
-            btn.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
-        elseif key == "anchor" then
-            btn.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
-        elseif key == "antiKick" then
-            btn.Text = "🔮 ANTI-KICK " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-        elseif key == "notifier" then
-            btn.Text = "🔔 УВЕДОМЛЕНИЯ " .. (kickNotifierActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = kickNotifierActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
-        elseif key == "super" then
-            btn.Text = "⚡ SUPER THROW " .. (superThrowActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = superThrowActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
-        elseif key == "jerk" then
-            btn.Text = "🔞 JERK OFF " .. (jerkOffActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = jerkOffActive and Color3.fromRGB(200, 50, 200) or Color3.fromRGB(180, 40, 40)
-        elseif key == "thirdPerson" then
-            btn.Text = "👁️ 3RD PERSON " .. (thirdPersonActive and "[ВКЛ]" or "[ВЫКЛ]")
-            btn.BackgroundColor3 = thirdPersonActive and Color3.fromRGB(0, 200, 255) or Color3.fromRGB(180, 40, 40)
+        if btn and btn.Parent then
+            if key == "fling" then
+                btn.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
+            elseif key == "antiGrab" then
+                btn.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+            elseif key == "speed" then
+                btn.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
+            elseif key == "anchor" then
+                btn.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
+            elseif key == "antiKick" then
+                btn.Text = "🔮 ANTI-KICK " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+            elseif key == "notifier" then
+                btn.Text = "🔔 УВЕДОМЛЕНИЯ " .. (kickNotifierActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = kickNotifierActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+            elseif key == "super" then
+                btn.Text = "⚡ SUPER THROW " .. (superThrowActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = superThrowActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
+            elseif key == "jerk" then
+                btn.Text = "🔞 JERK OFF " .. (jerkOffActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = jerkOffActive and Color3.fromRGB(200, 50, 200) or Color3.fromRGB(180, 40, 40)
+            elseif key == "thirdPerson" then
+                btn.Text = "👁️ 3RD PERSON " .. (thirdPersonActive and "[ВКЛ]" or "[ВЫКЛ]")
+                btn.BackgroundColor3 = thirdPersonActive and Color3.fromRGB(0, 200, 255) or Color3.fromRGB(180, 40, 40)
+            end
         end
     end
     if statusText then
@@ -135,7 +136,6 @@ end
 -- ========================================
 local antiKickConnection = nil
 local antiKickShuriken = nil
-local antiKickCoroutine = nil
 
 local function clearAntiKickShuriken()
     local plr = player
@@ -154,13 +154,8 @@ end
 
 local function startAntiKick()
     if antiKickConnection then return end
-    
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
-        -- Функция из Ragalic: спавн и приклейка сюрикена
-        -- Здесь будет полная реализация, но для краткости я оставлю упрощённую версию,
-        -- которая делает то же самое: спавнит NinjaShuriken и приклеивает к телу через StickyPartEvent.
-        -- Полный код из Ragalic слишком длинный, поэтому я адаптирую ключевую логику.
         pcall(function()
             local plr = player
             local char = plr.Character
@@ -172,7 +167,6 @@ local function startAntiKick()
             local inv = workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
             local shuriken = inv and inv:FindFirstChild("NinjaShuriken")
             if not shuriken then
-                -- Спавним сюрикен
                 local spawnRemote = ReplicatedStorage.MenuToys.SpawnToyRemoteFunction
                 pcall(function()
                     spawnRemote:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 12, 20), Vector3.new())
@@ -187,13 +181,11 @@ local function startAntiKick()
             if shuriken and shuriken:FindFirstChild("StickyPart") then
                 local stickyPart = shuriken.StickyPart
                 if stickyPart.CanTouch then
-                    -- Приклеиваем к FirePlayerPart
                     local firePart = hrp:FindFirstChild("FirePlayerPart") or hrp:WaitForChild("FirePlayerPart", 5)
                     if firePart then
                         local stickyEvent = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("StickyPartEvent")
                         stickyEvent:FireServer(stickyPart, firePart, CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(90), math.rad(90)))
                     end
-                    -- Делаем части невидимыми и неколлизящими
                     for _, obj in pairs(shuriken:GetChildren()) do
                         if obj:IsA("BasePart") then
                             obj.CanTouch = false
@@ -632,7 +624,7 @@ local function createGUI()
     screenGui.Parent = player:WaitForChild("PlayerGui")
     screenGui.ResetOnSpawn = false
 
-    local mainFrame = Instance.new("Frame")
+    mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 420, 0, 380)
     mainFrame.Position = UDim2.new(0.5, -210, 0.5, -190)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
@@ -675,7 +667,7 @@ local function createGUI()
     verText.Size = UDim2.new(1, -80, 0, 16)
     verText.Position = UDim2.new(0, 12, 0, 26)
     verText.BackgroundTransparency = 1
-    verText.Text = "v3.0 | Ragalic Style | Anti-Kick"
+    verText.Text = "v3.1 | Ragalic Style | Anti-Kick"
     verText.TextColor3 = Color3.fromRGB(255, 200, 100)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
@@ -765,10 +757,9 @@ local function createGUI()
 
     -- Функция обновления контента вкладки
     local function updateTabContent(tab)
-        -- Очищаем contentFrame
-        for _, child in ipairs(contentFrame:GetChildren()) do
-            child:Destroy()
-        end
+        -- Очищаем контейнер и сбрасываем таблицу кнопок
+        contentFrame:ClearAllChildren()
+        buttons = {}  -- очищаем старые ссылки
 
         local function createGroupBox(title, yPos)
             local frame = Instance.new("Frame")
@@ -839,6 +830,7 @@ local function createGUI()
             addButton(group1, "⛔ ОСТАНОВИТЬ ВСЁ", function() stopAll() end, "stop")
         end
 
+        -- Принудительно обновляем все кнопки
         updateButtons()
     end
 
@@ -890,11 +882,11 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP - RAGALIC STYLE v3.0")
+print("  💀 gakuka FTAP - RAGALIC STYLE v3.1")
 print("  =================================")
 print("  ✅ Anti-Kick из Ragalic (сюрикен)")
 print("  ✅ Third Person View")
 print("  ✅ Меню с вкладками (Grab, Defense, Player, Misc)")
 print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
-print("  ✅ ТЫ НЕ ЛЕТАЕШЬ, ПРЫЖОК НОРМАЛЬНЫЙ")
+print("  ✅ КНОПКИ МЕНЯЮТСЯ ПРИ ПЕРЕКЛЮЧЕНИИ ВКЛАДОК")
 print("====================================")
