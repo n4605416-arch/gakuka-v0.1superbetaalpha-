@@ -1,6 +1,6 @@
--- gakuka FTAP v0.1 beta (Anti-Lag исправлен)
--- Anti-Lag: удаляет линии захвата у всех (кроме себя) и замораживает головы (отключает Neck)
--- Головы не вращаются, но двигаются с телом
+-- gakuka FTAP v0.1 beta (финальная версия)
+-- Anti-Lag: удаляет линии и фиксирует наклон головы
+-- Геймпасс Further Reach: переключатель
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -71,9 +71,7 @@ local thirdPersonActive = false
 local antiLagActive = false
 local frozenObjects = {}
 
--- ========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
--- ========================================
+-- Утилиты
 local function notify(title, content, duration)
     Library:Notify({
         Title = title or "Notification",
@@ -605,10 +603,6 @@ local function startFling()
     if flingConn then flingConn:Disconnect() end
     flingConn = RunService.Heartbeat:Connect(function()
         if not flingActive then return end
-        local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
-        if isOnVehicle then
-            return
-        end
         if rootPart and rootPart.Velocity.Magnitude > 100 then
             rootPart.Velocity = Vector3.new(0, 0, 0)
             rootPart.RotVelocity = Vector3.new(0, 0, 0)
@@ -674,49 +668,12 @@ local function stopJerkOff()
 end
 
 -- ========================================
--- ГЕЙМПАСС FURTHER REACH
--- ========================================
-local function buyFurtherReach()
-    local gamepassEvents = ReplicatedStorage:FindFirstChild("GamepassEvents")
-    if not gamepassEvents then
-        notify("Ошибка", "GamepassEvents не найдены", 3)
-        return
-    end
-    
-    local buyRemote = gamepassEvents:FindFirstChild("BuyGamepass")
-    local purchaseRemote = gamepassEvents:FindFirstChild("PurchaseGamepass")
-    local checkRemote = gamepassEvents:FindFirstChild("CheckForGamepass")
-    
-    local gamepassId = 20837132
-    
-    if buyRemote then
-        pcall(function()
-            buyRemote:FireServer(gamepassId)
-            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
-        end)
-    elseif purchaseRemote then
-        pcall(function()
-            purchaseRemote:FireServer(gamepassId)
-            notify("Геймпасс", "Further Reach активирован (если он у вас есть)", 3)
-        end)
-    elseif checkRemote then
-        pcall(function()
-            checkRemote:FireServer(gamepassId)
-            notify("Геймпасс", "Проверка геймпасса выполнена", 3)
-        end)
-    else
-        notify("Ошибка", "Не найден Remote для покупки геймпасса", 3)
-    end
-end
-
--- ========================================
--- ANTI-LAG (ИСПРАВЛЕННЫЙ)
+-- ANTI-LAG (УБИРАЕТ ЛИНИИ И ФИКСИРУЕТ НАКЛОН ГОЛОВЫ)
 -- ========================================
 local antiLagConnection = nil
 local antiLagDescendantConn = nil
-local neckStates = {}  -- храним оригинальные состояния Neck
+local neckCFrames = {}
 
--- Функция удаления линий в Workspace
 local function removeLines()
     pcall(function()
         for _, v in ipairs(Workspace:GetDescendants()) do
@@ -729,7 +686,6 @@ local function removeLines()
     end)
 end
 
--- Подписка на новые объекты для удаления линий
 local function watchNewLines()
     if antiLagDescendantConn then return end
     antiLagDescendantConn = Workspace.DescendantAdded:Connect(function(obj)
@@ -744,48 +700,43 @@ local function watchNewLines()
     end)
 end
 
-local function freezeHeads()
+local function freezeHeadTilt()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
             local char = plr.Character
             if char then
                 local neck = char:FindFirstChild("Neck")
                 if neck and neck:IsA("Motor6D") then
-                    if not neckStates[neck] then
-                        neckStates[neck] = neck.Enabled
+                    if not neckCFrames[neck] then
+                        neckCFrames[neck] = neck.C0
                     end
-                    neck.Enabled = false
+                    local currentC0 = neck.C0
+                    local newC0 = CFrame.new(currentC0.Position) * CFrame.Angles(0, currentC0.Rotation.Y, currentC0.Rotation.Z)
+                    neck.C0 = newC0
                 end
             end
         end
     end
 end
 
-local function unfreezeHeads()
-    for neck, enabled in pairs(neckStates) do
+local function unfreezeHeadTilt()
+    for neck, originalC0 in pairs(neckCFrames) do
         if neck and neck.Parent then
-            neck.Enabled = enabled
+            neck.C0 = originalC0
         end
     end
-    neckStates = {}
+    neckCFrames = {}
 end
 
 local function startAntiLag()
     if antiLagConnection then return end
-    
-    -- Удаляем линии сразу
     removeLines()
-    -- Начинаем следить за новыми
     watchNewLines()
-    
-    -- Замораживаем головы
-    freezeHeads()
-    
+    freezeHeadTilt()
     antiLagConnection = RunService.Heartbeat:Connect(function()
         if not antiLagActive then return
-        -- Периодически удаляем линии (на случай если что-то появилось)
         removeLines()
-        freezeHeads()
+        freezeHeadTilt()
     end)
 end
 
@@ -798,8 +749,7 @@ local function stopAntiLag()
         antiLagDescendantConn:Disconnect()
         antiLagDescendantConn = nil
     end
-    unfreezeHeads()
-    -- Линии не восстанавливаем, они появятся при новых грабах
+    unfreezeHeadTilt()
 end
 
 -- ========================================
@@ -899,7 +849,7 @@ DefenseGroup:AddToggle("NotifierToggle", {
 })
 
 DefenseGroup:AddToggle("AntiLagToggle", {
-    Text = "ANTI-LAG (УБРАТЬ ЛИНИИ И ЗАМОРОЗИТЬ ГОЛОВЫ)",
+    Text = "ANTI-LAG (УБРАТЬ ЛИНИИ И ФИКСИРОВАТЬ НАКЛОН ГОЛОВЫ)",
     Default = false,
     Callback = function(value)
         antiLagActive = value
@@ -936,10 +886,37 @@ MiscGroup:AddToggle("JerkOffToggle", {
     end
 })
 
-MiscGroup:AddButton({
+MiscGroup:AddToggle("GamepassToggle", {
     Text = "ГЕЙМПАСС FURTHER REACH",
-    Func = function()
-        buyFurtherReach()
+    Default = false,
+    Callback = function(value)
+        if value then
+            local success, err = pcall(function()
+                loadstring(game:HttpGet("https://gitlab.com/cooldawghaha/gitlabswitch/-/raw/main/FreeReach.lua"))()
+            end)
+            if success then
+                Library:Notify({
+                    Title = "Геймпасс",
+                    Description = "Further Reach активирован!",
+                    Time = 3,
+                })
+            else
+                Library:Notify({
+                    Title = "Ошибка",
+                    Description = "Не удалось активировать геймпасс. Проверьте консоль (F9).",
+                    Time = 4,
+                })
+                warn("[Геймпасс] Ошибка:", err)
+                Toggles.GamepassToggle:SetValue(false)
+            end
+        else
+            Library:Notify({
+                Title = "Геймпасс",
+                Description = "Further Reach нельзя отключить, он останется активным.",
+                Time = 3,
+            })
+            Toggles.GamepassToggle:SetValue(true)
+        end
     end
 })
 
@@ -994,12 +971,9 @@ startKickNotifier()
 
 local function tick()
     if not character or not character.Parent then return end
-    local isOnVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")
-    if not isOnVehicle then
-        if rootPart and rootPart.Velocity.Magnitude > 100 then
-            rootPart.Velocity = Vector3.new(0, 0, 0)
-            rootPart.RotVelocity = Vector3.new(0, 0, 0)
-        end
+    if rootPart and rootPart.Velocity.Magnitude > 100 then
+        rootPart.Velocity = Vector3.new(0, 0, 0)
+        rootPart.RotVelocity = Vector3.new(0, 0, 0)
     end
 end
 RunService.Heartbeat:Connect(tick)
@@ -1023,9 +997,8 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  gakuka FTAP v0.1 beta (Anti-Lag исправлен)")
+print("  gakuka FTAP v0.1 beta (финальная)")
 print("  =================================")
-print("  Anti-Lag: удаляет линии у всех (кроме себя)")
-print("  и замораживает головы (отключает Neck)")
-print("  Головы не вращаются, но двигаются с телом")
+print("  Anti-Lag: удаляет линии и фиксирует наклон головы")
+print("  Геймпасс Further Reach – переключатель")
 print("====================================")
