@@ -1,6 +1,5 @@
--- gakuka FTAP - Tokra Style Menu v2.0 (Исправлено: кнопки меняются, прыжок нормальный)
--- Вкладки: Grab | Defense | Speed | Misc
--- Все функции: Anti-Grab, Иллюзия безопасности (Shuriken), ROBLOX EGOR, Anchor Grab, FLING GRAB
+-- gakuka FTAP - SIMPLE v1.3 (С уведомлениями о кике)
+-- Простое меню, все функции, оповещения о кике
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,11 +22,72 @@ local antiKickActive = true
 local frozenObjects = {}
 local screenGui = nil
 local mainFrame = nil
-local contentFrame = nil
-local currentTab = "Grab"
+local kickNotifierActive = true
 
--- ===== КНОПКИ ВКЛАДОК =====
-local tabButtons = {}
+-- ===== КНОПКИ =====
+local flingBtn, antiBtn, speedBtn, anchorBtn, kickBtn, statusText, notifierBtn
+
+-- ========================================
+-- === СИСТЕМА УВЕДОМЛЕНИЙ О КИКЕ ===
+-- ========================================
+local notifierConnection = nil
+
+local function startKickNotifier()
+    if notifierConnection then return end
+
+    notifierConnection = RunService.Heartbeat:Connect(function()
+        if not kickNotifierActive then return end
+
+        pcall(function()
+            -- Ищем объект черной дыры в Workspace
+            local blackHole = Workspace:FindFirstChild("BlackHole")
+            if blackHole then
+                -- Проверяем всех игроков
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= player then
+                        local char = plr.Character
+                        if char then
+                            -- Проверяем, не находится ли игрок внутри черной дыры
+                            local distance = (char:GetPivot().Position - blackHole.Position).Magnitude
+                            if distance < 15 then -- Радиус черной дыры
+                                -- Отправляем уведомление
+                                local notification = Instance.new("BillboardGui")
+                                notification.Size = UDim2.new(0, 200, 0, 50)
+                                notification.StudsOffset = Vector3.new(0, 3, 0)
+                                notification.Parent = char:FindFirstChild("Head") or char
+
+                                local label = Instance.new("TextLabel")
+                                label.Size = UDim2.new(1, 0, 1, 0)
+                                label.BackgroundTransparency = 1
+                                label.Text = "⚠️ " .. plr.Name .. " был кикнут черной дырой!"
+                                label.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                label.TextScaled = true
+                                label.Font = Enum.Font.GothamBold
+                                label.Parent = notification
+
+                                -- Удаляем уведомление через 3 секунды
+                                task.wait(3)
+                                notification:Destroy()
+
+                                -- Удаляем игрока, если он все еще в черной дыре
+                                if char and (char:GetPivot().Position - blackHole.Position).Magnitude < 15 then
+                                    char:Destroy()
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+local function stopKickNotifier()
+    if notifierConnection then
+        notifierConnection:Disconnect()
+        notifierConnection = nil
+    end
+end
 
 -- ========================================
 -- === ANTI-GRAB (БЕЗ БЛОКИРОВКИ ДВИЖЕНИЯ) ===
@@ -36,9 +96,11 @@ local antiGrabConnection = nil
 
 local function startAntiGrab()
     if antiGrabConnection then return end
+    
     antiGrabConnection = RunService.Heartbeat:Connect(function()
         if not antiGrabActive then return end
         if not character or not character.Parent then return end
+        
         local head = character:FindFirstChild("Head")
         if head then
             local partOwner = head:FindFirstChild("PartOwner")
@@ -177,7 +239,6 @@ local function setSpeed()
         else
             if humanoid.WalkSpeed ~= 16 then humanoid.WalkSpeed = 16 end
         end
-        -- НЕ ТРОГАЕМ JumpPower, оставляем как в игре
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
     end)
@@ -319,30 +380,36 @@ end
 local function toggleSpeed()
     speedModeActive = not speedModeActive
     setSpeed()
-    updateTabContent(currentTab)
+    updateButtons()
 end
 
 local function toggleAntiGrab()
     antiGrabActive = not antiGrabActive
     if antiGrabActive then startAntiGrab() else stopAntiGrab() end
-    updateTabContent(currentTab)
+    updateButtons()
 end
 
 local function toggleAnchorGrab()
     anchorGrabActive = not anchorGrabActive
     if anchorGrabActive then startAnchorGrab() else stopAnchorGrab() end
-    updateTabContent(currentTab)
+    updateButtons()
 end
 
 local function toggleIllusion()
     antiKickActive = not antiKickActive
     if antiKickActive then startIllusion() else stopIllusion() end
-    updateTabContent(currentTab)
+    updateButtons()
 end
 
 local function toggleFling()
     if flingActive then stopFling() else startFling() end
-    updateTabContent(currentTab)
+    updateButtons()
+end
+
+local function toggleNotifier()
+    kickNotifierActive = not kickNotifierActive
+    if kickNotifierActive then startKickNotifier() else stopKickNotifier() end
+    updateButtons()
 end
 
 local function stopAll()
@@ -351,55 +418,120 @@ local function stopAll()
     stopSpeedControl()
     stopIllusion()
     stopAnchorGrab()
+    stopKickNotifier()
     speedModeActive = false
     anchorGrabActive = false
-    updateTabContent(currentTab)
-end
-
--- ========================================
--- === GUI (TOKRA STYLE) ===
--- ========================================
-local closeBtn = nil
-
-local function createTabButtons()
-    local tabNames = {"Grab", "Defense", "Speed", "Misc"}
-    local tabY = 0.07
-    for i, name in ipairs(tabNames) do
-        local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(0.22, 0, 0, 25)
-        tabBtn.Position = UDim2.new(0.02 + (i-1) * 0.24, 0, tabY, 0)
-        tabBtn.BackgroundColor3 = (name == currentTab) and Color3.fromRGB(80, 80, 180) or Color3.fromRGB(40, 40, 60)
-        tabBtn.BackgroundTransparency = 0.3
-        tabBtn.Text = name
-        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        tabBtn.Font = Enum.Font.GothamBold
-        tabBtn.TextSize = 13
-        tabBtn.BorderSizePixel = 1
-        tabBtn.BorderColor3 = Color3.fromRGB(80, 80, 150)
-        tabBtn.Parent = mainFrame
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, 6)
-        c.Parent = tabBtn
-        tabBtn.MouseButton1Click:Connect(function()
-            currentTab = name
-            for _, btn in pairs(tabButtons) do
-                btn.BackgroundColor3 = (btn == tabBtn) and Color3.fromRGB(80, 80, 180) or Color3.fromRGB(40, 40, 60)
-            end
-            updateTabContent(name)
-        end)
-        tabButtons[name] = tabBtn
+    kickNotifierActive = false
+    updateButtons()
+    if statusText then
+        statusText.Text = "⛔ ВСЁ ОСТАНОВЛЕНО"
+        statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end
 
-local function updateTabContent(tab)
-    if contentFrame then
-        contentFrame:ClearAllChildren()
-    end
+-- ========================================
+-- === GUI ===
+-- ========================================
+local function createGUI()
+    if screenGui then screenGui:Destroy() end
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "gakukaGUI"
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+    screenGui.ResetOnSpawn = false
     
-    local y = 0.0
-    local function addButton(text, color, callback)
+    mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 350, 0, 380)
+    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -190)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 2
+    mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 180)
+    mainFrame.Parent = screenGui
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
+    
+    -- Заголовок
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 45)
+    titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 55)
+    titleBar.BackgroundTransparency = 0.3
+    titleBar.BorderSizePixel = 2
+    titleBar.BorderColor3 = Color3.fromRGB(80, 80, 180)
+    titleBar.Parent = mainFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 12)
+    titleCorner.Parent = titleBar
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Size = UDim2.new(1, -60, 1, 0)
+    titleText.Position = UDim2.new(0, 12, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "💀 gakuka FTAP"
+    titleText.TextColor3 = Color3.fromRGB(200, 50, 200)
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextSize = 18
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
+    
+    local verText = Instance.new("TextLabel")
+    verText.Size = UDim2.new(1, -60, 0, 16)
+    verText.Position = UDim2.new(0, 12, 0, 26)
+    verText.BackgroundTransparency = 1
+    verText.Text = "v1.3 | Уведомления о кике"
+    verText.TextColor3 = Color3.fromRGB(0, 255, 100)
+    verText.Font = Enum.Font.Gotham
+    verText.TextSize = 10
+    verText.TextXAlignment = Enum.TextXAlignment.Left
+    verText.Parent = titleBar
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 32, 0, 32)
+    closeBtn.Position = UDim2.new(1, -38, 0, 7)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    closeBtn.BackgroundTransparency = 0.2
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 18
+    closeBtn.BorderSizePixel = 1
+    closeBtn.BorderColor3 = Color3.fromRGB(200, 0, 0)
+    closeBtn.Parent = titleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    closeCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        stopAll()
+        if screenGui then screenGui:Destroy(); screenGui = nil end
+    end)
+    
+    -- СТАТУС
+    statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(0.9, 0, 0, 25)
+    statusText.Position = UDim2.new(0.05, 0, 0.14, 0)
+    statusText.BackgroundColor3 = Color3.fromRGB(35, 35, 60)
+    statusText.BackgroundTransparency = 0.5
+    statusText.Text = "🔔 Уведомления о кике ВКЛ"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 100)
+    statusText.Font = Enum.Font.GothamSemibold
+    statusText.TextSize = 12
+    statusText.Parent = mainFrame
+    
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 6)
+    statusCorner.Parent = statusText
+    
+    -- ===== КНОПКИ =====
+    local function createBtn(text, y, color, cb)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0.85, 0, 0, 28)
+        btn.Size = UDim2.new(0.85, 0, 0, 30)
         btn.Position = UDim2.new(0.075, 0, y, 0)
         btn.BackgroundColor3 = color or Color3.fromRGB(50, 50, 80)
         btn.BackgroundTransparency = 0.3
@@ -409,116 +541,86 @@ local function updateTabContent(tab)
         btn.TextSize = 12
         btn.BorderSizePixel = 2
         btn.BorderColor3 = Color3.fromRGB(80, 80, 150)
-        btn.Parent = contentFrame
+        btn.Parent = mainFrame
+        
         local c = Instance.new("UICorner")
         c.CornerRadius = UDim.new(0, 8)
         c.Parent = btn
-        btn.MouseButton1Click:Connect(callback)
-        y = y + 0.09
+        
+        btn.MouseButton1Click:Connect(cb)
         return btn
     end
     
-    if tab == "Grab" then
-        addButton("💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]"), flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40), function()
-            toggleFling()
-        end)
-        addButton("⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40), function()
-            toggleAnchorGrab()
-        end)
-    elseif tab == "Defense" then
-        addButton("🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]"), antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
-            toggleAntiGrab()
-        end)
-        addButton("🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]"), antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40), function()
-            toggleIllusion()
-        end)
-    elseif tab == "Speed" then
-        addButton("🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]"), speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40), function()
-            toggleSpeed()
-        end)
-    elseif tab == "Misc" then
-        addButton("⛔ ОСТАНОВИТЬ ВСЁ", Color3.fromRGB(150, 0, 30), function()
-            stopAll()
-        end)
+    local function updateButtons()
+        if flingBtn then
+            flingBtn.Text = "💥 FLING GRAB " .. (flingActive and "[ВКЛ]" or "[ВЫКЛ]")
+            flingBtn.BackgroundColor3 = flingActive and Color3.fromRGB(0, 200, 50) or Color3.fromRGB(180, 40, 40)
+        end
+        if antiBtn then
+            antiBtn.Text = "🛡️ ANTI-GRAB " .. (antiGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+            antiBtn.BackgroundColor3 = antiGrabActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+        end
+        if speedBtn then
+            speedBtn.Text = "🏃 ROBLOX EGOR " .. (speedModeActive and "[ВКЛ]" or "[ВЫКЛ]")
+            speedBtn.BackgroundColor3 = speedModeActive and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(180, 40, 40)
+        end
+        if anchorBtn then
+            anchorBtn.Text = "⚓ ANCHOR GRAB " .. (anchorGrabActive and "[ВКЛ]" or "[ВЫКЛ]")
+            anchorBtn.BackgroundColor3 = anchorGrabActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(180, 40, 40)
+        end
+        if kickBtn then
+            kickBtn.Text = "🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ " .. (antiKickActive and "[ВКЛ]" or "[ВЫКЛ]")
+            kickBtn.BackgroundColor3 = antiKickActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+        end
+        if notifierBtn then
+            notifierBtn.Text = "🔔 УВЕДОМЛЕНИЯ О КИКЕ " .. (kickNotifierActive and "[ВКЛ]" or "[ВЫКЛ]")
+            notifierBtn.BackgroundColor3 = kickNotifierActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 40, 40)
+        end
+        if statusText then
+            local statusParts = {}
+            if kickNotifierActive then table.insert(statusParts, "🔔 Уведомления ВКЛ") else table.insert(statusParts, "🔕 Уведомления ВЫКЛ") end
+            if antiKickActive then table.insert(statusParts, "| 🛡️ Защита ВКЛ") else table.insert(statusParts, "| 🛡️ Защита ВЫКЛ") end
+            statusText.Text = table.concat(statusParts, " ")
+        end
     end
-end
-
--- ===== GUI СОЗДАНИЕ =====
-local function createGUI()
-    if screenGui then screenGui:Destroy() end
-    screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "gakukaGUI"
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-    screenGui.ResetOnSpawn = false
     
-    mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 320, 0, 320)
-    mainFrame.Position = UDim2.new(0.5, -160, 0.5, -160)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-    mainFrame.BackgroundTransparency = 0.1
-    mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 180)
-    mainFrame.Parent = screenGui
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = mainFrame
+    local y = 0.20
     
-    -- Заголовок
-    local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 35)
-    titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 55)
-    titleBar.BackgroundTransparency = 0.3
-    titleBar.BorderSizePixel = 2
-    titleBar.BorderColor3 = Color3.fromRGB(80, 80, 180)
-    titleBar.Parent = mainFrame
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 12)
-    titleCorner.Parent = titleBar
+    flingBtn = createBtn("💥 FLING GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleFling()
+    end)
+    y = y + 0.09
     
-    local titleText = Instance.new("TextLabel")
-    titleText.Size = UDim2.new(1, -60, 1, 0)
-    titleText.Position = UDim2.new(0, 10, 0, 0)
-    titleText.BackgroundTransparency = 1
-    titleText.Text = "💀 gakuka FTAP"
-    titleText.TextColor3 = Color3.fromRGB(200, 50, 200)
-    titleText.Font = Enum.Font.GothamBold
-    titleText.TextSize = 16
-    titleText.TextXAlignment = Enum.TextXAlignment.Left
-    titleText.Parent = titleBar
+    antiBtn = createBtn("🛡️ ANTI-GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleAntiGrab()
+    end)
+    y = y + 0.09
     
-    -- Кнопка закрытия
-    closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 28, 0, 28)
-    closeBtn.Position = UDim2.new(1, -34, 0, 4)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-    closeBtn.BackgroundTransparency = 0.2
-    closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 16
-    closeBtn.BorderSizePixel = 1
-    closeBtn.BorderColor3 = Color3.fromRGB(200, 0, 0)
-    closeBtn.Parent = titleBar
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 6)
-    closeCorner.Parent = closeBtn
-    closeBtn.MouseButton1Click:Connect(function()
+    speedBtn = createBtn("🏃 ROBLOX EGOR [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleSpeed()
+    end)
+    y = y + 0.09
+    
+    anchorBtn = createBtn("⚓ ANCHOR GRAB [ВЫКЛ]", y, Color3.fromRGB(180, 40, 40), function()
+        toggleAnchorGrab()
+    end)
+    y = y + 0.09
+    
+    kickBtn = createBtn("🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ [ВКЛ]", y, Color3.fromRGB(0, 180, 0), function()
+        toggleIllusion()
+    end)
+    y = y + 0.09
+    
+    notifierBtn = createBtn("🔔 УВЕДОМЛЕНИЯ О КИКЕ [ВКЛ]", y, Color3.fromRGB(0, 180, 0), function()
+        toggleNotifier()
+    end)
+    y = y + 0.09
+    
+    local stopBtn = createBtn("⛔ ОСТАНОВИТЬ ВСЁ", y, Color3.fromRGB(150, 0, 30), function()
         stopAll()
-        if screenGui then screenGui:Destroy(); screenGui = nil end
     end)
     
-    -- Контейнер для контента вкладок
-    contentFrame = Instance.new("Frame")
-    contentFrame.Size = UDim2.new(1, 0, 1, -50)
-    contentFrame.Position = UDim2.new(0, 0, 0, 50)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-    
-    createTabButtons()
-    updateTabContent("Grab")
-    
+    updateButtons()
     return screenGui
 end
 
@@ -538,6 +640,7 @@ end
 -- ========================================
 setSpeed()
 startIllusion()
+startKickNotifier()
 createGUI()
 
 RunService.Heartbeat:Connect(tick)
@@ -550,6 +653,7 @@ player.CharacterAdded:Connect(function(newChar)
     setSpeed()
     if antiGrabActive then startAntiGrab() end
     if antiKickActive then startIllusion() end
+    if kickNotifierActive then startKickNotifier() end
     if flingActive then
         stopFling()
         startFling()
@@ -561,14 +665,13 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP - TOKRA STYLE")
+print("  💀 gakuka FTAP - SIMPLE v1.3")
 print("  =================================")
 print("  🛡️ ANTI-GRAB - БЕЗ БЛОКИРОВКИ")
-print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СЮРИКЕН) - ВКЛ")
-print("  ✅ ROBLOX EGOR - скорость 70 (прыжок НЕ ТРОГАЕМ)")
+print("  🔮 ИЛЛЮЗИЯ БЕЗОПАСНОСТИ - ВКЛ")
+print("  🔔 УВЕДОМЛЕНИЯ О КИКЕ - ВКЛ")
+print("  ✅ ROBLOX EGOR - скорость 70")
 print("  ⚓ ANCHOR GRAB - РАБОТАЕТ")
-print("  💥 FLING GRAB - все летают (кроме тебя)")
+print("  💥 FLING GRAB - все летают")
 print("  ✅ ТЫ НЕ ЛЕТАЕШЬ")
-print("  =================================")
-print("  📌 ВКЛАДКИ: Grab | Defense | Speed | Misc")
 print("====================================")
