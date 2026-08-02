@@ -1,4 +1,4 @@
--- gakuka FTAP - ULTIMATE v1.3 (СПАВН ТОЙ-СЮРИКЕНА)
+-- gakuka FTAP - ULTIMATE v1.3 (СЮРИКЕН ТОЙ ИЗ ЧАСТЕЙ)
 -- Все функции: Anti-Grab, ROBLOX EGOR (speed 70), Super Throw, Anchor Grab, FLING GRAB,
 -- Иллюзия безопасности (Anti-Kick + Anti-Kick Grab с той-сюрикеном), Уведомления о киках
 -- Кнопки работают, меню сворачивается, прыжок нормальный
@@ -121,49 +121,40 @@ local function stopAntiGrab()
 end
 
 -- ========================================
--- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СПАВН ТОЙ-СЮРИКЕНА) ===
+-- === ИЛЛЮЗИЯ БЕЗОПАСНОСТИ (СПАВН ТОЙ-СЮРИКЕНА ИЗ ЧАСТЕЙ) ===
 -- ========================================
 local antiKickConnection = nil
 local shurikenObject = nil
 local kickGrabConnections = {}
 
--- Функция для спавна Toy
-local function spawnToy(toyName, position)
-    -- Пытаемся найти игрушку в ReplicatedStorage (где обычно хранятся Toy'и)
-    local toy = ReplicatedStorage:FindFirstChild(toyName)
-    if not toy then
-        warn("[Иллюзия] Toy '" .. toyName .. "' не найдена. Создаём базовую.")
-        -- Если игрушки нет, создаём её из частей
-        toy = Instance.new("Model")
-        toy.Name = toyName
-        
-        local mainPart = Instance.new("Part")
-        mainPart.Size = Vector3.new(1.8, 0.2, 1.8)
-        mainPart.Shape = Enum.PartType.Block
-        mainPart.BrickColor = BrickColor.new("Bright blue")
-        mainPart.Material = Enum.Material.Neon
-        mainPart.Anchored = false
-        mainPart.CanCollide = true
-        mainPart.Parent = toy
-        
-        -- Добавляем лопасти, чтобы было похоже на сюрикен
-        for _, angle in ipairs({0, 90, 180, 270}) do
-            local blade = Instance.new("Part")
-            blade.Size = Vector3.new(0.8, 0.2, 2.0)
-            blade.Shape = Enum.PartType.Block
-            blade.BrickColor = BrickColor.new("Bright blue")
-            blade.Material = Enum.Material.Neon
-            blade.Anchored = false
-            blade.CanCollide = true
-            blade.Parent = toy
-            blade.CFrame = mainPart.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
-        end
-        
-        -- Делаем главную часть видимой
-        mainPart.Transparency = 0
+local function spawnToy(position)
+    local toy = Instance.new("Model")
+    toy.Name = "ShurikenToy"
+    
+    local mainPart = Instance.new("Part")
+    mainPart.Size = Vector3.new(1.8, 0.2, 1.8)
+    mainPart.Shape = Enum.PartType.Block
+    mainPart.BrickColor = BrickColor.new("Bright blue")
+    mainPart.Material = Enum.Material.Neon
+    mainPart.Anchored = false
+    mainPart.CanCollide = true
+    mainPart.Parent = toy
+    toy.PrimaryPart = mainPart  -- обязательно для SetPrimaryPartCFrame
+    
+    -- Добавляем лопасти
+    for _, angle in ipairs({0, 90, 180, 270}) do
+        local blade = Instance.new("Part")
+        blade.Size = Vector3.new(0.8, 0.2, 2.0)
+        blade.Shape = Enum.PartType.Block
+        blade.BrickColor = BrickColor.new("Bright blue")
+        blade.Material = Enum.Material.Neon
+        blade.Anchored = false
+        blade.CanCollide = true
+        blade.Parent = toy
+        blade.CFrame = mainPart.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 1.0)
     end
     
-    -- Клонируем игрушку и помещаем в мир
+    mainPart.Transparency = 0
     local newToy = toy:Clone()
     newToy.Parent = workspace
     if position then
@@ -175,10 +166,11 @@ end
 local function startIllusion()
     if antiKickConnection then return end
 
-    -- Спавним сюрикен как Toy
+    -- Спавним сюрикен, если его нет
     if not shurikenObject then
-        shurikenObject = spawnToy("Shuriken", rootPart.Position + Vector3.new(0, 2, 0))
-        print("[Иллюзия] Сюрикен-той спавнится в мире!")
+        local spawnPos = rootPart and rootPart.Position + Vector3.new(0, 2, 0) or Vector3.new(0, 10, 0)
+        shurikenObject = spawnToy(spawnPos)
+        print("[Иллюзия] Сюрикен-той создан в мире!")
     end
 
     -- Основной цикл: телепортируем сюрикен в тело
@@ -188,7 +180,6 @@ local function startIllusion()
         if not rootPart then return end
 
         if shurikenObject and shurikenObject.Parent then
-            -- Перемещаем сюрикен в центр персонажа
             shurikenObject:SetPrimaryPartCFrame(rootPart.CFrame * CFrame.new(0, 0.5, 0))
         end
 
@@ -645,7 +636,7 @@ local function createGUI()
     verText.Size = UDim2.new(1, -100, 0, 18)
     verText.Position = UDim2.new(0, 15, 0, 28)
     verText.BackgroundTransparency = 1
-    verText.Text = "v1.3 | ТОЙ-СЮРИКЕН | СВОРАЧИВАНИЕ"
+    verText.Text = "v1.3 | СЮРИКЕН ТОЙ | СВОРАЧИВАНИЕ"
     verText.TextColor3 = Color3.fromRGB(150, 200, 255)
     verText.Font = Enum.Font.Gotham
     verText.TextSize = 11
@@ -825,7 +816,7 @@ end
 -- === ИНИЦИАЛИЗАЦИЯ ===
 -- ========================================
 setSpeed()
-startIllusion()       -- <-- теперь одна функция включает всю защиту с той-сюрикеном
+startIllusion()
 startKickNotifier()
 createGUI()
 
