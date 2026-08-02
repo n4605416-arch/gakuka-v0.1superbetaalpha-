@@ -1,5 +1,6 @@
--- gakuka FTAP v0.1 beta (с Anti-Kick Кирка)
--- Добавлена функция Anti-Kick (Кирка): спавнит кирку на спину, защищает от удаления
+-- gakuka FTAP v0.1 beta (Anti-Kick Кирка исправлен, убраны смайлики)
+-- Убраны все смайлики из названий кнопок и текста
+-- Anti-Kick Кирка работает аналогично сюрикену: спавнит кирку и приклеивает на спину
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -12,7 +13,7 @@ Library.ForceCheckbox = false
 
 -- Создание окна (меню)
 local Window = Library:CreateWindow({
-    Title = "💀 gakuka FTAP",
+    Title = "gakuka FTAP",
     Footer = "v0.1 beta",
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -60,7 +61,7 @@ local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
 local antiKickActive = false
-local antiKickPickaxeActive = false  -- <-- НОВАЯ ПЕРЕМЕННАЯ
+local antiKickPickaxeActive = false
 local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
@@ -226,7 +227,7 @@ local function stopAntiKick()
 end
 
 -- ========================================
--- ANTI-KICK (КИРКА) - НОВАЯ ФУНКЦИЯ
+-- ANTI-KICK (КИРКА) - ИСПРАВЛЕННЫЙ
 -- ========================================
 local antiKickPickaxeConnection = nil
 local pickaxeWeld = nil
@@ -252,7 +253,7 @@ local function hasPickaxeAttached()
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    -- Проверяем, есть ли Weld от кирки
+    -- Проверяем наличие Weld от кирки к HRP
     for _, weld in ipairs(hrp:GetChildren()) do
         if weld:IsA("Weld") and weld.Name == "PickaxeWeld" then
             local part0 = weld.Part0
@@ -261,12 +262,11 @@ local function hasPickaxeAttached()
             end
         end
     end
-    -- Проверяем папку игрушек
+    -- Проверяем папку игрушек на наличие приклеенной кирки
     local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
     if inv then
         local pickaxe = inv:FindFirstChild("AntiKickPickaxe")
         if pickaxe then
-            -- Если есть Weld к персонажу, считаем что приклеена
             for _, weld in ipairs(pickaxe:GetDescendants()) do
                 if weld:IsA("Weld") and (weld.Part0 == hrp or weld.Part1 == hrp) then
                     return true
@@ -284,23 +284,36 @@ local function attachPickaxeToBack(pickaxe)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Найдём основную часть кирки (обычно это Handle или PrimaryPart)
-    local mainPart = pickaxe:FindFirstChild("Handle") or pickaxe:FindFirstChild("PrimaryPart") or pickaxe:FindFirstChildWhichIsA("BasePart")
+    -- Находим основную часть кирки (Handle, PrimaryPart или любую BasePart)
+    local mainPart = pickaxe:FindFirstChild("Handle") or pickaxe:FindFirstChild("PrimaryPart")
+    if not mainPart then
+        -- Ищем любую BasePart
+        for _, child in ipairs(pickaxe:GetChildren()) do
+            if child:IsA("BasePart") then
+                mainPart = child
+                break
+            end
+        end
+    end
     if not mainPart then return end
     
-    -- Создаём Weld для прикрепления к спине
-    if pickaxeWeld then pcall(function() pickaxeWeld:Destroy() end) end
+    -- Удаляем старый Weld
+    if pickaxeWeld then
+        pcall(function() pickaxeWeld:Destroy() end)
+        pickaxeWeld = nil
+    end
+    
+    -- Создаём новый Weld
     pickaxeWeld = Instance.new("Weld")
     pickaxeWeld.Name = "PickaxeWeld"
     pickaxeWeld.Part0 = hrp
     pickaxeWeld.Part1 = mainPart
-    -- Позиционируем на спине (смещение назад и немного вверх)
-    pickaxeWeld.C0 = CFrame.new(0, 0, -1.5) * CFrame.Angles(math.rad(20), 0, 0) -- за спиной, немного наклон
+    -- Позиционируем на спине (смещение назад и вверх)
+    pickaxeWeld.C0 = CFrame.new(0, 0, -1.5) * CFrame.Angles(math.rad(20), 0, 0)
     pickaxeWeld.Parent = hrp
     pickaxeWeld.Enabled = true
     
-    -- Делаем кирку невидимой для других (но не полностью, можно оставить видимой)
-    -- Защита от взятия другими: устанавливаем NetworkOwner
+    -- Устанавливаем NetworkOwner для защиты от взятия другими
     local setOwner = ReplicatedStorage:FindFirstChild("GrabEvents") and ReplicatedStorage.GrabEvents:FindFirstChild("SetNetworkOwner")
     if setOwner then
         pcall(function()
@@ -308,7 +321,7 @@ local function attachPickaxeToBack(pickaxe)
         end)
     end
     
-    -- Делаем части неколлизионными и невидимыми для касаний (опционально)
+    -- Делаем части неколлизионными и невидимыми для касаний
     for _, obj in pairs(pickaxe:GetDescendants()) do
         if obj:IsA("BasePart") then
             obj.CanTouch = false
@@ -353,8 +366,6 @@ local function startAntiKickPickaxe()
             end
         end)
     end)
-    
-    -- Дополнительная защита от удаления: если кирку удалили, она пересоздастся в цикле
 end
 
 local function stopAntiKickPickaxe()
@@ -382,7 +393,7 @@ end
 
 local function notifyKick(displayName)
     Library:Notify({
-        Title = "⚠️ Кикнут",
+        Title = "Кикнут",
         Description = displayName .. " был кикнут чёрной дырой!",
         Time = 4,
     })
@@ -688,7 +699,7 @@ local function stopAll()
     stopAntiGrab()
     stopSpeedControl()
     stopAntiKick()
-    stopAntiKickPickaxe()  -- <-- останавливаем кирку
+    stopAntiKickPickaxe()
     stopAnchorGrab()
     stopKickNotifier()
     stopSuperThrow()
@@ -700,18 +711,18 @@ local function stopAll()
     jerkOffActive = false
     antiKickPickaxeActive = false
     Library:Notify({
-        Title = "⛔ Всё остановлено",
+        Title = "Всё остановлено",
         Description = "Все функции отключены",
         Time = 2,
     })
 end
 
 -- ========================================
--- ДОБАВЛЯЕМ TOGGLES В МЕНЮ
+-- ДОБАВЛЯЕМ TOGGLES В МЕНЮ (БЕЗ СМАЙЛИКОВ)
 -- ========================================
 -- Grab Group
 GrabGroup:AddToggle("FlingGrabToggle", {
-    Text = "💥 FLING GRAB",
+    Text = "FLING GRAB",
     Default = false,
     Callback = function(value)
         flingActive = value
@@ -720,7 +731,7 @@ GrabGroup:AddToggle("FlingGrabToggle", {
 })
 
 GrabGroup:AddToggle("AnchorGrabToggle", {
-    Text = "⚓ ANCHOR GRAB",
+    Text = "ANCHOR GRAB",
     Default = false,
     Callback = function(value)
         anchorGrabActive = value
@@ -729,7 +740,7 @@ GrabGroup:AddToggle("AnchorGrabToggle", {
 })
 
 GrabGroup:AddToggle("SuperThrowToggle", {
-    Text = "⚡ SUPER THROW",
+    Text = "SUPER THROW",
     Default = false,
     Callback = function(value)
         superThrowActive = value
@@ -739,7 +750,7 @@ GrabGroup:AddToggle("SuperThrowToggle", {
 
 -- Defense Group
 DefenseGroup:AddToggle("AntiGrabToggle", {
-    Text = "🛡️ ANTI-GRAB",
+    Text = "ANTI-GRAB",
     Default = false,
     Callback = function(value)
         antiGrabActive = value
@@ -748,7 +759,7 @@ DefenseGroup:AddToggle("AntiGrabToggle", {
 })
 
 DefenseGroup:AddToggle("AntiKickToggle", {
-    Text = "🔮 ANTI-KICK (СЮРИКЕН)",
+    Text = "ANTI-KICK (СЮРИКЕН)",
     Default = false,
     Callback = function(value)
         antiKickActive = value
@@ -757,7 +768,7 @@ DefenseGroup:AddToggle("AntiKickToggle", {
 })
 
 DefenseGroup:AddToggle("AntiKickPickaxeToggle", {
-    Text = "🔨 ANTI-KICK (КИРКА)",
+    Text = "ANTI-KICK (КИРКА)",
     Default = false,
     Callback = function(value)
         antiKickPickaxeActive = value
@@ -766,7 +777,7 @@ DefenseGroup:AddToggle("AntiKickPickaxeToggle", {
 })
 
 DefenseGroup:AddToggle("NotifierToggle", {
-    Text = "🔔 УВЕДОМЛЕНИЯ",
+    Text = "УВЕДОМЛЕНИЯ",
     Default = true,
     Callback = function(value)
         kickNotifierActive = value
@@ -776,7 +787,7 @@ DefenseGroup:AddToggle("NotifierToggle", {
 
 -- Player Group
 PlayerGroup:AddToggle("RobloxEgorToggle", {
-    Text = "🏃 ROBLOX EGOR",
+    Text = "ROBLOX EGOR",
     Default = false,
     Callback = function(value)
         speedModeActive = value
@@ -785,7 +796,7 @@ PlayerGroup:AddToggle("RobloxEgorToggle", {
 })
 
 PlayerGroup:AddToggle("ThirdPersonToggle", {
-    Text = "👁️ 3RD PERSON",
+    Text = "3RD PERSON",
     Default = false,
     Callback = function(value)
         thirdPersonActive = value
@@ -795,7 +806,7 @@ PlayerGroup:AddToggle("ThirdPersonToggle", {
 
 -- Misc Group
 MiscGroup:AddToggle("JerkOffToggle", {
-    Text = "🔞 JERK OFF",
+    Text = "JERK OFF",
     Default = false,
     Callback = function(value)
         jerkOffActive = value
@@ -804,7 +815,7 @@ MiscGroup:AddToggle("JerkOffToggle", {
 })
 
 MiscGroup:AddButton({
-    Text = "⛔ ОСТАНОВИТЬ ВСЁ",
+    Text = "ОСТАНОВИТЬ ВСЁ",
     Func = function()
         stopAll()
         Toggles.FlingGrabToggle:SetValue(false)
@@ -880,11 +891,11 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 print("====================================")
-print("  💀 gakuka FTAP v0.1 beta")
+print("  gakuka FTAP v0.1 beta")
 print("  =================================")
-print("  ✅ Меню в стиле Ragalic Mobile")
-print("  ✅ Anti-Kick (Сюрикен) - выключен по умолчанию")
-print("  ✅ Anti-Kick (Кирка) - выключена по умолчанию")
-print("  ✅ Кирка цепляется на спину и защищена от удаления")
-print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK (2 вида), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
+print("  Меню без смайликов")
+print("  Anti-Kick (Сюрикен) - выключен по умолчанию")
+print("  Anti-Kick (Кирка) - выключена по умолчанию")
+print("  Кирка цепляется на спину и защищена от удаления")
+print("  Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK (2 вида), ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
 print("====================================")
