@@ -1,6 +1,6 @@
--- gakuka FTAP v0.1 beta
--- Меню в стиле Ragalic Mobile с кнопкой Toggle для сворачивания
--- Anti-Kick по умолчанию ВЫКЛЮЧЕН
+-- gakuka FTAP v0.1 beta (исправленный)
+-- Убрана лишняя кнопка "МЕНЮ"
+-- Anti-Kick теперь спавнит сюрикен только если его нет или он не приклеен к телу
 
 -- Загрузка библиотеки Obsidian
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -60,7 +60,7 @@ local flingActive = false
 local antiGrabActive = false
 local speedModeActive = false
 local anchorGrabActive = false
-local antiKickActive = false   -- <-- ПО УМОЛЧАНИЮ ВЫКЛЮЧЕН
+local antiKickActive = false
 local kickNotifierActive = true
 local superThrowActive = false
 local jerkOffActive = false
@@ -141,10 +141,44 @@ local function clearAntiKickShuriken()
     end
 end
 
+local function hasShurikenAttached()
+    local char = player.Character
+    if not char then return false end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local firePart = hrp:FindFirstChild("FirePlayerPart")
+    if not firePart then return false end
+    -- Проверяем, есть ли у FirePlayerPart приклеенные части от сюрикена
+    for _, child in ipairs(firePart:GetChildren()) do
+        if child:IsA("Weld") or child:IsA("WeldConstraint") then
+            local otherPart = child.Part0 or child.Part1
+            if otherPart and otherPart.Parent and otherPart.Parent.Name == "AntiKick" then
+                return true
+            end
+        end
+    end
+    -- Альтернатива: проверить папку с игрушками на наличие приклеенного сюрикена
+    local inv = workspace:FindFirstChild(player.Name .. "SpawnedInToys")
+    if inv then
+        local shuriken = inv:FindFirstChild("AntiKick")
+        if shuriken and shuriken:FindFirstChild("StickyPart") then
+            local sp = shuriken.StickyPart
+            if sp:FindFirstChild("StickyWeld") and sp.StickyWeld.Part1 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function startAntiKick()
     if antiKickConnection then return end
     antiKickConnection = RunService.Heartbeat:Connect(function()
         if not antiKickActive then return end
+        -- Если сюрикен уже приклеен, не спавним новый
+        if hasShurikenAttached() then
+            return
+        end
         pcall(function()
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -536,62 +570,7 @@ local function stopAll()
 end
 
 -- ========================================
--- СОЗДАНИЕ КНОПКИ TOGGLE (СВОРАЧИВАНИЕ МЕНЮ)
--- ========================================
-local function createToggleButton()
-    local toggleGui = Instance.new("ScreenGui")
-    toggleGui.Name = "gakukaToggle"
-    toggleGui.Parent = player:WaitForChild("PlayerGui")
-    toggleGui.ResetOnSpawn = false
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 60, 0, 60)
-    btn.Position = UDim2.new(0.02, 0, 0.85, 0) -- левый нижний угол
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
-    btn.BackgroundTransparency = 0.2
-    btn.Text = "МЕНЮ"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.BorderSizePixel = 2
-    btn.BorderColor3 = Color3.fromRGB(80, 80, 180)
-    btn.Parent = toggleGui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0) -- круглая кнопка
-    corner.Parent = btn
-
-    -- Находим основное окно библиотеки (создаётся в PlayerGui с именем ScreenGui)
-    local function getMainGui()
-        for _, gui in ipairs(player.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name == "gakukaGUI" then
-                return gui
-            end
-        end
-        return nil
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        local mainGui = getMainGui()
-        if mainGui then
-            mainGui.Enabled = not mainGui.Enabled
-            if mainGui.Enabled then
-                btn.Text = "МЕНЮ"
-                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
-            else
-                btn.Text = "ВКЛ"
-                btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-            end
-        end
-    end)
-
-    -- Изначально меню видимо, кнопка показывает "МЕНЮ"
-    btn.Text = "МЕНЮ"
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
-end
-
--- ========================================
--- ДОБАВЛЯЕМ TOGGLES В МЕНЮ (с правильными состояниями)
+-- ДОБАВЛЯЕМ TOGGLES В МЕНЮ
 -- ========================================
 -- Grab Group
 GrabGroup:AddToggle("FlingGrabToggle", {
@@ -633,7 +612,7 @@ DefenseGroup:AddToggle("AntiGrabToggle", {
 
 DefenseGroup:AddToggle("AntiKickToggle", {
     Text = "🔮 ANTI-KICK",
-    Default = false,  -- ВЫКЛЮЧЕН ПО УМОЛЧАНИЮ
+    Default = false,
     Callback = function(value)
         antiKickActive = value
         if value then startAntiKick() else stopAntiKick() end
@@ -646,16 +625,6 @@ DefenseGroup:AddToggle("NotifierToggle", {
     Callback = function(value)
         kickNotifierActive = value
         if value then startKickNotifier() else stopKickNotifier() end
-    end
-})
-
--- Target Group (добавим кнопки для цели, хотя бы одну для примера)
-TargetGroup:AddToggle("TargetNotifyToggle", {
-    Text = "🎯 Уведомления о цели",
-    Default = false,
-    Callback = function(value)
-        -- здесь можно добавить функционал, если нужно
-        notify("Цель", "Функция в разработке", 2)
     end
 })
 
@@ -692,14 +661,12 @@ MiscGroup:AddButton({
     Text = "⛔ ОСТАНОВИТЬ ВСЁ",
     Func = function()
         stopAll()
-        -- Сбрасываем все toggles (кроме AntiKick, он должен остаться выключенным)
         Toggles.FlingGrabToggle:SetValue(false)
         Toggles.AnchorGrabToggle:SetValue(false)
         Toggles.SuperThrowToggle:SetValue(false)
         Toggles.AntiGrabToggle:SetValue(false)
-        -- AntiKick оставляем выключенным (если был включен, сбросим)
         Toggles.AntiKickToggle:SetValue(false)
-        Toggles.NotifierToggle:SetValue(true)  -- уведомления оставляем включенными
+        Toggles.NotifierToggle:SetValue(true)
         Toggles.RobloxEgorToggle:SetValue(false)
         Toggles.ThirdPersonToggle:SetValue(false)
         Toggles.JerkOffToggle:SetValue(false)
@@ -735,10 +702,7 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 -- ИНИЦИАЛИЗАЦИЯ
 -- ========================================
 setSpeed()
--- AntiKick НЕ запускаем, так как по умолчанию выключен
--- startAntiKick() -- убрано
-startKickNotifier()
-createToggleButton()  -- создаём кнопку сворачивания
+startKickNotifier() -- уведомления включены по умолчанию
 
 -- Постоянный контроль
 local function tick()
@@ -771,8 +735,8 @@ print("====================================")
 print("  💀 gakuka FTAP v0.1 beta")
 print("  =================================")
 print("  ✅ Меню в стиле Ragalic Mobile")
-print("  ✅ Кнопка 'МЕНЮ' для сворачивания")
 print("  ✅ Anti-Kick по умолчанию ВЫКЛЮЧЕН")
+print("  ✅ Anti-Kick спавнит сюрикен только если он не приклеен")
+print("  ✅ Убрана лишняя кнопка МЕНЮ")
 print("  ✅ Все функции: FLING GRAB, ANTI-GRAB, ANTI-KICK, ROBLOX EGOR, SUPER THROW, ANCHOR GRAB, JERK OFF, уведомления")
-print("  ✅ Версия 0.1 beta")
 print("====================================")
